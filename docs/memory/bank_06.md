@@ -13,10 +13,13 @@ This document captures the implementation of the Large Interest Model (LIM) pipe
    - Integrated with Perplexity (via OpenRouter) and Gemini APIs for deep research
 
 2. **Data Processing Flow**
-   - Established a three-stage pipeline: research → enhancement → storage
+   - Established a four-stage pipeline: planning → research → enhancement → storage
+   - Planning stage uses Gemini to structure search queries based on user data / history / preferences / instructions / configuration
    - Research stage uses Perplexity for deep, contextual information gathering
-   - Enhancement stage uses Gemini to structure and format the data
+   - Enhancement stage uses Gemini to structure and format the data for UI/UX
    - Storage stage saves to both database and JSON files for redundancy
+   - Structured outputs for all LLM interactions to drive UI/UX flows
+   - All LLM interactions stored in a reusable / analyzable manner in data layer
 
 3. **Interest Management**
    - Added trending interest detection based on check-in data and seasonal factors

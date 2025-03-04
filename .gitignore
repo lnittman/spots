@@ -41,3 +41,12 @@ next-env.d.ts
 
 # recommendation data
 /data/recommendations
+
+# prisma
+/prisma/dev.db
+/prisma/migrations/*
+!/prisma/migrations/create-migration.sh
+
+# IDE
+/.idea
+/.vscode
