@@ -1,4 +1,3 @@
-import { streamText } from "ai";
 import { OpenAI } from "openai";
 import { z } from "zod";
 
@@ -35,8 +34,29 @@ export async function streamOpenAI({
     ],
   });
 
-  // Create a stream from the response
-  return streamText(response);
+  // Create a custom stream response
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of response) {
+            const text = chunk.choices[0]?.delta?.content || '';
+            if (text) {
+              controller.enqueue(new TextEncoder().encode(text));
+            }
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    }),
+    {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    }
+  );
 }
 
 // Schema for expand interests request

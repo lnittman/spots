@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { Icon, LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Map component specifically for the dashboard
 export function DashboardMap({ 
-  userLocation = [-122.4194, 37.7749], // Default to SF
+  userLocation = [-122.4194, 37.7749] as LatLngExpression, // Default to SF
   userInterests = [],
   spots = []
 }: { 
-  userLocation?: [number, number],
+  userLocation?: LatLngExpression,
   userInterests?: string[],
   spots?: any[]
 }) {
@@ -40,9 +41,9 @@ export function DashboardMap({
         />
         
         {/* User location marker */}
-        <CircleMarker 
+        <Circle 
           center={userLocation}
-          radius={12}
+          radius={300}
           pathOptions={{ fillColor: '#3b82f6', color: '#2563eb', weight: 2, fillOpacity: 0.6 }}
         >
           <Popup>
@@ -50,14 +51,17 @@ export function DashboardMap({
               <h3 className="font-medium">Your Location</h3>
             </div>
           </Popup>
-        </CircleMarker>
+        </Circle>
 
         {/* Spot markers */}
         {spots.map((spot, index) => (
-          <CircleMarker
+          <Circle
             key={spot.id || index}
-            center={spot.coordinates || [userLocation[0] + (Math.random() * 0.02 - 0.01), userLocation[1] + (Math.random() * 0.02 - 0.01)]}
-            radius={8}
+            center={spot.coordinates || [
+              (userLocation as [number, number])[0] + (Math.random() * 0.02 - 0.01), 
+              (userLocation as [number, number])[1] + (Math.random() * 0.02 - 0.01)
+            ]}
+            radius={200}
             pathOptions={{ 
               fillColor: spot.color || '#f97316', 
               color: '#fdba74', 
@@ -80,7 +84,7 @@ export function DashboardMap({
                 )}
               </div>
             </Popup>
-          </CircleMarker>
+          </Circle>
         ))}
       </MapContainer>
     </div>

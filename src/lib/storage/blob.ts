@@ -10,7 +10,7 @@ import { put, list, del, PutBlobResult } from "@vercel/blob";
 export async function uploadToBlob(
   fileName: string, 
   data: string | ArrayBuffer | Blob,
-  options?: { access?: "public" | "private"; addRandomSuffix?: boolean; cacheControlMaxAge?: number }
+  options?: { access?: "public"; addRandomSuffix?: boolean; cacheControlMaxAge?: number }
 ): Promise<PutBlobResult> {
   try {
     const defaultOptions = { 
@@ -63,7 +63,11 @@ export async function exampleBlobUsage() {
   const { url } = await uploadToBlob(
     'articles/example.txt', 
     'This is an example text file!', 
-    { access: 'public' }
+    { 
+      access: 'public',
+      addRandomSuffix: false,
+      cacheControlMaxAge: 3600 // 1 hour
+    }
   );
   
   return url;

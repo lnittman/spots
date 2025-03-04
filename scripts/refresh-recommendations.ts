@@ -15,15 +15,15 @@
  *   DATABASE_URL - Connection string for the database
  */
 
-import { PrismaClient } from '@prisma/client';
-import fs from 'fs';
 import path from 'path';
+import fs from 'fs';
+import { PrismaClient } from '@prisma/client';
 import { LLMClient, LLMProvider } from '../src/lib/lim/llm-client';
 import { LIMLogger, LogCategory } from '../src/lib/lim/logging';
-import { OutputFormat } from '../src/lib/lim/templates';
+import { OutputFormat, TemplateType } from '../src/lib/lim/templates';
 
 // Initialize logger
-const logger = new LIMLogger();
+const logger = LIMLogger.getInstance();
 
 // Initialize LLM client
 const llmClient = new LLMClient();
@@ -220,10 +220,17 @@ async function performDeepResearch(interest: typeof CONFIG.INTERESTS[0], locatio
     // Use OpenRouter to query Perplexity
     const response = await llmClient.processTemplate(
       {
-        name: "spot-research",
+        id: "spot-research",
+        type: TemplateType.CONTENT_ENHANCEMENT,
+        version: "1.0.0",
+        description: "Research spots for an interest in a location",
         systemPrompt: `You are a knowledgeable local expert on ${location.name} with deep knowledge about ${interest.name} spots. Provide factual, specific information about actual places that exist. Be specific and include important details.`,
-        userPrompt: researchPrompt,
-        outputFormat: { type: "text" } as OutputFormat
+        userPromptTemplate: researchPrompt,
+        outputFormat: OutputFormat.MARKDOWN,
+        outputSchema: {},
+        tags: ['RESEARCH', interest.id, location.id],
+        category: LogCategory.RECOMMENDATION,
+        parameters: []
       },
       {},
       { 
@@ -270,7 +277,7 @@ async function enhanceWithGemini(researchResults: string, interest: typeof CONFI
     );
     
     // Create an enhancement prompt
-    const enhancementPrompt = `
+    const enhancePrompt = `
       Please analyze the following research about ${interest.name.toLowerCase()} places in ${location.name} and structure it into a clean, organized JSON format for our recommendation system.
       
       RESEARCH DATA:
@@ -295,15 +302,22 @@ async function enhanceWithGemini(researchResults: string, interest: typeof CONFI
     // Use Gemini to enhance and structure the data
     const response = await llmClient.processTemplate(
       {
-        name: "enhance-recommendations",
-        systemPrompt: `You are a helpful assistant that structures data about places into clean JSON format for a recommendation system. Only return valid, well-structured JSON without any explanations or extra text.`,
-        userPrompt: enhancementPrompt,
-        outputFormat: { type: "json" } as OutputFormat
+        id: "enhance-recommendations",
+        type: TemplateType.RECOMMENDATION_GENERATION,
+        version: "1.0.0",
+        description: "Enhance and structure recommendations",
+        systemPrompt: `You are a recommendation enhancement AI. Your job is to take research about ${interest.name} spots in ${location.name} and transform it into structured, detailed recommendations.`,
+        userPromptTemplate: enhancePrompt,
+        outputFormat: OutputFormat.JSON,
+        outputSchema: {},
+        tags: ['ENHANCE', interest.id, location.id],
+        category: LogCategory.RECOMMENDATION,
+        parameters: []
       },
       {},
       { 
         ...CONFIG.LLM.ENHANCEMENT,
-        tags: ['PIPELINE', 'ENHANCEMENT', interest.id, location.id] 
+        tags: ['PIPELINE', 'ENHANCE', interest.id, location.id] 
       }
     );
     
@@ -350,36 +364,42 @@ async function storeResults(enhancedResults: string, interest: typeof CONFIG.INT
       // This would use Prisma to store in the database
       // For each recommendation in the array
       for (const rec of recommendations) {
-        await prisma.recommendation.upsert({
-          where: {
-            // Unique constraint would be on interest+location+name
-            uniqueConstraint: {
+        try {
+          await prisma.recommendation.upsert({
+            where: {
+              // Using a composite ID since there's no uniqueConstraint field
+              id: `${interest.id}-${location.id}-${rec.name.replace(/\s+/g, '-').toLowerCase()}`
+            },
+            update: {
+              description: rec.description,
+              score: rec.rating || 0,
+              source: "LIM-Pipeline"
+            },
+            create: {
+              id: `${interest.id}-${location.id}-${rec.name.replace(/\s+/g, '-').toLowerCase()}`,
+              spotId: rec.id || generateId(),
               interestId: interest.id,
-              locationId: location.id,
-              name: rec.name
+              location: location.name,
+              description: rec.description,
+              score: rec.rating || 0,
+              source: "LIM-Pipeline"
             }
-          },
-          update: {
-            description: rec.description,
-            address: rec.address,
-            type: rec.type,
-            tags: rec.tags,
-            checkIns: rec.checkIns,
-            lastUpdated: new Date()
-          },
-          create: {
-            id: rec.id,
-            interestId: interest.id,
-            locationId: location.id,
-            name: rec.name,
-            description: rec.description,
-            address: rec.address,
-            type: rec.type,
-            tags: rec.tags,
-            checkIns: rec.checkIns,
-            lastUpdated: new Date()
-          }
-        });
+          });
+          
+          logger.info(
+            LogCategory.RECOMMENDATION,
+            `Stored recommendation: ${rec.name}`,
+            { interestId: interest.id, locationId: location.id },
+            ['STORE', 'SUCCESS']
+          );
+        } catch (error) {
+          logger.error(
+            LogCategory.RECOMMENDATION,
+            `Failed to store recommendation: ${rec.name}`,
+            { error, interestId: interest.id, locationId: location.id },
+            ['STORE', 'ERROR']
+          );
+        }
       }
     }
     
@@ -395,57 +415,101 @@ async function storeResults(enhancedResults: string, interest: typeof CONFIG.INT
  * Update trending interests based on check-in data and seasonal factors
  */
 async function updateTrendingInterests() {
-  console.log(`\n🔥 Updating trending interests...`);
-  
   try {
-    // In production, this would analyze check-in data and other factors
-    // For demo, we'll use a simple algorithm
+    logger.info(
+      LogCategory.INTEREST,
+      "Updating trending interests",
+      {},
+      ['TRENDING', 'START']
+    );
     
-    // Get current month for seasonal weighting
-    const currentMonth = new Date().getMonth();
+    // Get all recommendations and aggregate by interest
+    const recommendations = await prisma.recommendation.findMany();
     
-    // Simple seasonal weights (just an example)
-    const seasonalWeights: Record<string, number> = {
-      coffee: 1.0,
-      hiking: currentMonth >= 3 && currentMonth <= 8 ? 1.5 : 0.8, // Spring/Summer boost
-      art: 1.0,
-      food: 1.2, // Always popular
-      music: currentMonth >= 5 && currentMonth <= 8 ? 1.4 : 1.0, // Summer boost
-      books: currentMonth >= 9 && currentMonth <= 11 ? 1.3 : 1.0, // Fall boost
-      shopping: currentMonth >= 10 || currentMonth <= 1 ? 1.5 : 0.9, // Holiday season boost
-      nature: currentMonth >= 3 && currentMonth <= 8 ? 1.4 : 0.8, // Spring/Summer boost
-    };
+    // Calculate trend scores based on recommendations
+    const interestScores = new Map();
     
-    // In production, this would update a database table
-    // For demo, we'll just log the trending interests
-    const trendingInterests = CONFIG.INTERESTS
-      .map(interest => ({
-        ...interest,
-        score: Math.random() * seasonalWeights[interest.id] * 100
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 4) // Top 4 trending
-      .map(i => i.id);
+    for (const rec of recommendations) {
+      const currentScore = interestScores.get(rec.interestId) || 0;
+      interestScores.set(rec.interestId, currentScore + rec.score);
+    }
     
-    console.log(`  🔥 Trending interests: ${trendingInterests.join(', ')}`);
+    // Sort interests by score and get top 5
+    const sortedInterests = Array.from(interestScores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
     
-    // In production, save to database
-    if (process.env.NODE_ENV === 'production') {
-      await prisma.trendingInterest.deleteMany({});
+    // Prepare trending interests array with the right structure
+    const trendingInterests = [];
+    
+    for (const [id, score] of sortedInterests) {
+      const interest = await prisma.interest.findUnique({
+        where: { id }
+      });
       
-      for (const interestId of trendingInterests) {
-        await prisma.trendingInterest.create({
-          data: {
-            interestId,
-            updatedAt: new Date()
-          }
+      if (interest) {
+        trendingInterests.push({
+          id,
+          name: interest.name,
+          score
         });
       }
     }
+
+    // In production, save to database
+    if (process.env.NODE_ENV === 'production') {
+      logger.info(
+        LogCategory.INTEREST,
+        "Resetting trending interests",
+        {},
+        ['TRENDING', 'RESET']
+      );
+      
+      // Update all interests to not be trending first
+      await prisma.interest.updateMany({
+        where: {},
+        data: {
+          trending: false,
+          trendScore: 0
+        }
+      });
+
+      // Then set the trending ones
+      for (const trendingInterest of trendingInterests) {
+        await prisma.interest.update({
+          where: { 
+            id: trendingInterest.id 
+          },
+          data: {
+            trending: true,
+            trendScore: trendingInterest.score
+          }
+        });
+        
+        logger.info(
+          LogCategory.INTEREST,
+          `Set trending interest: ${trendingInterest.name}`,
+          { interestId: trendingInterest.id, score: trendingInterest.score },
+          ['TRENDING', 'UPDATE']
+        );
+      }
+    }
+    
+    logger.info(
+      LogCategory.INTEREST,
+      "Trending interests updated",
+      { count: trendingInterests.length },
+      ['TRENDING', 'COMPLETE']
+    );
     
     return trendingInterests;
   } catch (error) {
-    console.error('  ❌ Failed to update trending interests:', error);
+    logger.error(
+      LogCategory.INTEREST,
+      "Error updating trending interests",
+      { error },
+      ['TRENDING', 'ERROR']
+    );
     return [];
   }
 }
@@ -575,6 +639,11 @@ function getTagsForInterest(interestId: string): string[] {
   // Return 3-4 random tags from the list
   const tags = tagMap[interestId] || ['Interesting', 'Popular', 'Recommended', 'Local'];
   return tags.sort(() => 0.5 - Math.random()).slice(0, 3 + Math.floor(Math.random() * 2));
+}
+
+// Helper function to generate IDs
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
 
 // Run the main function if this script is executed directly

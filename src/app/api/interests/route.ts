@@ -204,21 +204,21 @@ async function generateInterestsWithLIM(
     
     // Fill the template with parameters
     const params = {
-      location,
+          location,
       favoriteCities: favoriteCities.join(', '),
-      season: currentSeason,
+          season: currentSeason,
       currentDate: new Date().toISOString().split('T')[0],
     };
     
     // Process the template using the LLM client
     const result = await llmClient.processTemplate(template, params, {
-      temperature: 0.7,
+          temperature: 0.7,
       tags: ['INTEREST_GENERATION', 'LOCATION_BASED', location.replace(/\s+/g, '_').toUpperCase()]
     });
     
     // End the timer
-    await endTimer();
-    
+      await endTimer();
+      
     // Extract interests from the LLM response
     let interests: string[] = [];
     

@@ -124,7 +124,7 @@ export default function SearchPage() {
       toast({
         title: "Error",
         description: "Something went wrong. Please try again.",
-        variant: "destructive",
+        type: "error",
       });
     } finally {
       setLoading(false);
@@ -217,19 +217,8 @@ export default function SearchPage() {
               {displayedPlaces.map((place) => (
                 <PlaceCard
                   key={place.id}
-                  id={place.id}
-                  name={place.name}
-                  description={place.description}
-                  type={place.type}
-                  imageUrl={place.imageUrl}
-                  address={place.address}
-                  rating={place.rating}
-                  openHours={place.openHours}
-                  priceLevel={place.priceLevel}
-                  tags={place.tags}
-                  matchReason={place.matchReason}
-                  distance={place.distance}
-                  savedByUser={savedPlaces.has(place.id)}
+                  place={place}
+                  isSaved={savedPlaces.has(place.id)}
                   onSave={() => handleSave(place.id)}
                 />
               ))}
