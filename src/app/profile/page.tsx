@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { MapPin, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,9 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InterestTile } from "@/components/interest-tile";
 import { enhanceInterest } from "@/lib/interest-utils";
 import { EditProfileDialog } from "@/components/profile/edit-profile-dialog";
+import { EditInterestsDialog } from "@/components/edit-interests-dialog";
+import { Badge } from "@/components/ui/badge";
 
 export default function ProfilePage() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [interests, setInterests] = useState<string[]>([]);
@@ -101,6 +103,61 @@ export default function ProfilePage() {
     }
   };
   
+  // Refresh interests data
+  const refreshInterestsData = async () => {
+    try {
+      const response = await fetch('/api/user/interests');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.interests && Array.isArray(data.interests)) {
+          setInterests(data.interests);
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing interest data:", error);
+    }
+  };
+
+  // Handle saving updated interests and location
+  const handleSaveInterests = async (newInterests: string[], newLocation: string, newFavoriteCities?: string[]) => {
+    try {
+      // Save interests via API
+      const response = await fetch('/api/user/interests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          interests: newInterests,
+          location: newLocation,
+          favoriteCities: newFavoriteCities || []
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save interests');
+      }
+      
+      // Update local state
+      setInterests(newInterests);
+      
+      // Refresh profile data to get updated location and favorite cities
+      await refreshProfileData();
+    } catch (error) {
+      console.error("Error saving interests:", error);
+    }
+  };
+  
+  // Handle user logout
+  const handleLogout = async () => {
+    try {
+      await signOut({ redirect: false });
+      router.push('/login');
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+  
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -129,6 +186,105 @@ export default function ProfilePage() {
       </div>
     );
   }
+
+  // Render interests section
+  const renderInterests = () => {
+    if (interests.length === 0) {
+      return (
+        <div className="bg-muted p-4 rounded-lg text-center">
+          <p className="text-muted-foreground">No interests yet!</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-2"
+            onClick={() => document.getElementById('edit-interests-dialog')?.click()}
+          >
+            Add Interests
+          </Button>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-medium">Interests</h3>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => document.getElementById('edit-interests-dialog')?.click()}
+          >
+            Edit Interests
+          </Button>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {interests.map(interest => (
+            <InterestTile 
+              key={interest} 
+              interest={enhanceInterest(interest)} 
+              size="md"
+              interactive={false}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Show the user's profile information
+  const renderProfile = () => {
+    return (
+      <div className="grid gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-2xl font-bold">
+            {profileData.name || session?.user?.name || "Anonymous User"}
+          </h2>
+          {profileData.pronouns && (
+            <p className="text-muted-foreground">{profileData.pronouns}</p>
+          )}
+          {profileData.emoji && (
+            <div className="text-3xl my-2">{profileData.emoji}</div>
+          )}
+          {profileData.location && (
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <MapPin className="h-4 w-4" />
+              <span>{profileData.location}</span>
+            </div>
+          )}
+        </div>
+        
+        {profileData.bio && (
+          <p className="text-muted-foreground">{profileData.bio}</p>
+        )}
+        
+        {/* Display favorite cities if available */}
+        {profileData.favoriteCities && profileData.favoriteCities.length > 0 && (
+          <div className="mt-2">
+            <h3 className="text-sm font-medium mb-1">Favorite Cities</h3>
+            <div className="flex flex-wrap gap-1">
+              {profileData.favoriteCities.map((city: string) => (
+                <Badge key={city} variant="secondary">
+                  {city}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <div className="flex items-center gap-2 mt-2">
+          <EditProfileDialog 
+            initialData={profileData} 
+            onProfileUpdated={refreshProfileData}
+          />
+          
+          <Button variant="outline" onClick={handleLogout}>
+            Log Out
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,79 +321,12 @@ export default function ProfilePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* User Information */}
             <div className="bg-card border rounded-lg p-6 shadow-sm">
-              <h2 className="text-xl font-semibold mb-4">User Information</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Name</h3>
-                  <p className="flex items-center gap-2">
-                    {profileData.emoji && <span>{profileData.emoji}</span>}
-                    {session?.user?.name || "Not provided"}
-                  </p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Email</h3>
-                  <p>{session?.user?.email || "Not provided"}</p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Location</h3>
-                  <p>{profileData.location || "Not provided"}</p>
-                </div>
-                
-                {profileData.pronouns && (
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Pronouns</h3>
-                    <p>{profileData.pronouns}</p>
-                  </div>
-                )}
-                
-                {profileData.bio && (
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Bio</h3>
-                    <p className="text-sm">{profileData.bio}</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mt-6 pt-6 border-t">
-                <EditProfileDialog onProfileUpdated={refreshProfileData} />
-              </div>
+              {renderProfile()}
             </div>
             
             {/* Interests */}
             <div className="bg-card border rounded-lg p-6 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold">Your Interests</h2>
-                <Link href="/onboarding">
-                  <Button variant="outline" size="sm">
-                    Edit Interests
-                  </Button>
-                </Link>
-              </div>
-              
-              {interests.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {interests.map(interest => (
-                    <InterestTile
-                      key={interest}
-                      interest={enhanceInterest(interest)}
-                      size="md"
-                      interactive={false}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center p-6 bg-muted/30 rounded-lg">
-                  <p className="text-muted-foreground mb-4">
-                    You haven't set up any interests yet.
-                  </p>
-                  <Link href="/onboarding">
-                    <Button>Set Up Interests</Button>
-                  </Link>
-                </div>
-              )}
+              {renderInterests()}
             </div>
           </div>
           
@@ -316,6 +405,13 @@ export default function ProfilePage() {
             </Tabs>
           </div>
         </div>
+
+        {/* Add EditInterestsDialog component */}
+        <EditInterestsDialog 
+          userInterests={interests}
+          userLocation={profileData.location}
+          onSave={handleSaveInterests}
+        />
       </main>
     </div>
   );

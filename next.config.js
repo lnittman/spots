@@ -13,12 +13,13 @@ const nextConfig = {
   // Set the source directory explicitly
   distDir: '.next',
   
-  // Rewrite all paths to use the src directory
+  // Experimental features
   experimental: {
-    appDir: true,
-    serverComponentsExternalPackages: [],
     optimizeCss: true,
   },
+  
+  // Move serverComponentsExternalPackages to the root level
+  serverExternalPackages: [],
   
   // Define path rewrites to ensure API routes work correctly
   async rewrites() {

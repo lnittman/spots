@@ -24,22 +24,36 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Define the form schema
+// Form validation schema
 const formSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  location: z.string().optional(),
-  emoji: z.string().max(2).optional(),
-  pronouns: z.string().optional(),
-  bio: z.string().max(160, "Bio must be 160 characters or less").optional(),
+  name: z.string().min(1, "Name is required"),
+  bio: z.string().max(160, "Bio must be less than 160 characters").optional().nullable(),
+  location: z.string().max(100, "Location must be less than 100 characters").optional().nullable(),
+  emoji: z.string().max(2, "Emoji must be a single character").optional().nullable(),
+  pronouns: z.string().max(30, "Pronouns must be less than 30 characters").optional().nullable(),
+  favoriteCities: z.array(z.string()).optional().nullable(),
 });
 
 type FormData = z.infer<typeof formSchema>;
+
+interface EditProfileDialogProps {
+  initialData?: {
+    name?: string | null;
+    bio?: string | null;
+    location?: string | null;
+    emoji?: string | null;
+    pronouns?: string | null;
+    favoriteCities?: string[] | null;
+  };
+  onProfileUpdated?: () => void;
+}
 
 // Common emojis for profile selection
 const EMOJI_OPTIONS = [
@@ -67,7 +81,7 @@ const PRONOUN_OPTIONS = [
   { value: "custom", label: "Custom" },
 ];
 
-export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () => void }) {
+export function EditProfileDialog({ initialData, onProfileUpdated }: EditProfileDialogProps) {
   const { data: session, update } = useSession();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -78,11 +92,12 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      location: "",
-      emoji: "",
-      pronouns: "",
-      bio: "",
-    },
+      bio: null,
+      location: null,
+      emoji: null,
+      pronouns: null,
+      favoriteCities: [],
+    }
   });
   
   // Fetch current profile data when dialog opens
@@ -93,10 +108,10 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
   }, [open]);
   
   const fetchProfileData = async () => {
-    setLoading(true);
-    setError(null);
-    
     try {
+      setLoading(true);
+      setError(null);
+      
       const response = await fetch("/api/user/profile");
       
       if (!response.ok) {
@@ -105,20 +120,23 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
       
       const data = await response.json();
       
-      form.reset({
-        name: data.profile.name || "",
-        location: data.profile.location || "",
-        emoji: data.profile.emoji || "",
-        pronouns: data.profile.pronouns || "",
-        bio: data.profile.bio || "",
-      });
+      if (data.profile) {
+        form.reset({
+          name: data.profile.name || session?.user?.name || "",
+          bio: data.profile.bio || null,
+          location: data.profile.location || null,
+          emoji: data.profile.emoji || null,
+          pronouns: data.profile.pronouns || null,
+          favoriteCities: data.profile.favoriteCities || [],
+        });
+      }
       
       // Check if pronouns are custom
       if (data.profile.pronouns && !PRONOUN_OPTIONS.some(p => p.value === data.profile.pronouns)) {
         setCustomPronouns(true);
       }
-    } catch (err) {
-      console.error("Error fetching profile:", err);
+    } catch (error) {
+      console.error("Failed to fetch profile data", error);
       setError("Failed to load profile data. Please try again.");
     } finally {
       setLoading(false);
@@ -180,22 +198,20 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          Edit Profile
-        </Button>
+        <Button variant="outline">Edit Profile</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>
-            Update your profile information. Click save when you're done.
+            Update your profile information below.
           </DialogDescription>
         </DialogHeader>
         
         {error && (
-          <Alert variant="destructive" className="my-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="bg-destructive/15 text-destructive text-sm p-2 rounded-md">
+            {error}
+          </div>
         )}
         
         <Form {...form}>
@@ -207,7 +223,25 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Your name" {...field} disabled={loading} />
+                    <Input placeholder="Your name" {...field} value={field.value || ""} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="pronouns"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Pronouns</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g. she/her, they/them" 
+                      {...field} 
+                      value={field.value || ""} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -221,7 +255,11 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
                 <FormItem>
                   <FormLabel>Location</FormLabel>
                   <FormControl>
-                    <Input placeholder="City, State" {...field} disabled={loading} />
+                    <Input 
+                      placeholder="e.g. San Francisco, CA" 
+                      {...field} 
+                      value={field.value || ""} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -235,69 +273,13 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
                 <FormItem>
                   <FormLabel>Profile Emoji</FormLabel>
                   <FormControl>
-                    <Select
-                      value={field.value || ""}
-                      onValueChange={field.onChange}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an emoji" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {EMOJI_OPTIONS.map(emoji => (
-                          <SelectItem key={emoji.value} value={emoji.value}>
-                            {emoji.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input 
+                      placeholder="Choose an emoji" 
+                      {...field} 
+                      value={field.value || ""} 
+                      maxLength={2}
+                    />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="pronouns"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Pronouns</FormLabel>
-                  <div className="space-y-2">
-                    <Select
-                      value={customPronouns ? "custom" : field.value || ""}
-                      onValueChange={(value) => {
-                        if (value === "custom") {
-                          setCustomPronouns(true);
-                          field.onChange("");
-                        } else {
-                          setCustomPronouns(false);
-                          field.onChange(value);
-                        }
-                      }}
-                      disabled={loading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select pronouns" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRONOUN_OPTIONS.map(pronoun => (
-                          <SelectItem key={pronoun.value} value={pronoun.value}>
-                            {pronoun.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    
-                    {customPronouns && (
-                      <Input
-                        placeholder="Enter your pronouns"
-                        value={field.value || ""}
-                        onChange={field.onChange}
-                        disabled={loading}
-                      />
-                    )}
-                  </div>
                   <FormMessage />
                 </FormItem>
               )}
@@ -310,31 +292,30 @@ export function EditProfileDialog({ onProfileUpdated }: { onProfileUpdated?: () 
                 <FormItem>
                   <FormLabel>Bio</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="A short bio about yourself"
-                      {...field}
-                      disabled={loading}
+                    <Textarea 
+                      placeholder="Write a short bio about yourself" 
                       className="resize-none"
-                      rows={3}
+                      rows={4}
+                      {...field} 
+                      value={field.value || ""} 
                     />
                   </FormControl>
+                  <FormDescription>
+                    {form.watch("bio")?.length || 0}/160 characters
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
             
-            <DialogFooter className="pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
+            <DialogFooter>
               <Button type="submit" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Changes
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>

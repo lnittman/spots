@@ -21,6 +21,7 @@ declare module "next-auth" {
 const interestsSchema = z.object({
   interests: z.array(z.string()),
   location: z.string().optional(),
+  favoriteCities: z.array(z.string()).optional(),
 });
 
 // Type for the Interest record
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     
     // Parse and validate the request body
     const body = await request.json();
-    const { interests, location } = interestsSchema.parse(body);
+    const { interests, location, favoriteCities } = interestsSchema.parse(body);
     
     // Store in mock database
     const userEmail = session.user.email;
@@ -60,15 +61,20 @@ export async function POST(request: NextRequest) {
           location: null,
           emoji: null,
           pronouns: null,
-          bio: null
+          bio: null,
+          favoriteCities: []
         };
         
         userProfiles[userEmail] = {
           ...currentProfile,
-          location: location
+          location: location,
+          favoriteCities: favoriteCities || currentProfile.favoriteCities || []
         };
         
         console.log(`Location updated to ${location} for user ${userEmail}`);
+        if (favoriteCities) {
+          console.log(`Favorite cities updated for user ${userEmail}: ${favoriteCities.join(', ')}`);
+        }
       } catch (e) {
         console.error("Error updating location:", e);
       }
@@ -78,6 +84,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Interests saved successfully",
       interests: interests,
+      favoriteCities: favoriteCities || []
     });
   } catch (error) {
     console.error("Error saving user interests:", error);

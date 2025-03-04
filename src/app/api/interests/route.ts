@@ -1,418 +1,343 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
-import { Interest } from "@/components/interest-selector";
 import { LIMLogger, LogCategory } from "@/lib/lim/logging";
 import { LLMClient, LLMProvider } from "@/lib/lim/llm-client";
-import { TemplateType, getTemplate } from "@/lib/lim/templates";
-
-// Cache TTL in seconds (3 days)
-const CACHE_TTL = 60 * 60 * 24 * 3;
-
-// Initialize Redis client if environment variables are available
-let redis: Redis | null = null;
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-  redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
-}
+import { PromptTemplate, TemplateType, OutputFormat, getTemplate, fillTemplate } from "@/lib/lim/templates";
 
 // Initialize logger
 const logger = LIMLogger.getInstance();
 
-// Initialize LLM client
-const llmClient = new LLMClient();
+// Cache for location-based interests
+const interestsCache: Record<string, { interests: string[], timestamp: number }> = {};
 
-// Default colors for interests based on category
-const interestColors: Record<string, string> = {
-  food: "#FF6B6B",
-  drink: "#4ECDC4",
-  activity: "#AAC789",
-  culture: "#FFD166",
-  outdoors: "#1A535C",
-  social: "#FF6B6B",
-  shopping: "#FFD166",
-  wellness: "#AAC789",
-  education: "#4ECDC4",
-  default: "#4ECDC4"
+// Cache TTL (2 hours)
+const CACHE_TTL = 1000 * 60 * 60 * 2;
+
+// Sample interests data for different locations as fallback
+const locationInterests: Record<string, string[]> = {
+  "San Francisco": [
+    "Coffee", "Tech", "Hiking", "Startups", "Seafood", 
+    "Wine", "Art Galleries", "Bay Views", "Cycling", "Dim Sum"
+  ],
+  "New York": [
+    "Theater", "Pizza", "Museums", "Fashion", "Finance", 
+    "Jazz", "Bagels", "City Parks", "Skyscrapers", "Bookstores"
+  ],
+  "Los Angeles": [
+    "Beaches", "Film", "Tacos", "Celebrity Spotting", "Hiking", 
+    "Smoothies", "Vintage Shopping", "Street Art", "Yoga", "Rooftop Bars"
+  ],
+  "London": [
+    "Pubs", "Museums", "Theatre", "Parks", "Afternoon Tea", 
+    "Markets", "History", "Architecture", "Football", "Live Music"
+  ],
+  "Tokyo": [
+    "Ramen", "Anime", "Cherry Blossoms", "Technology", "Street Fashion", 
+    "Temples", "Karaoke", "Gaming", "Sushi", "Night Life"
+  ],
+  "Paris": [
+    "Cafés", "Art", "Fashion", "Pastries", "Wine", 
+    "Architecture", "Museums", "Seine", "Cheese", "Literature"
+  ]
 };
 
-// Categories for interests
-const interestCategories: Record<string, string> = {
-  "coffee": "drink",
-  "tea": "drink",
-  "hiking": "outdoors",
-  "biking": "outdoors",
-  "swimming": "activity",
-  "photography": "activity",
-  "art": "culture",
-  "music": "culture",
-  "food": "food",
-  "dining": "food",
-  "reading": "education",
-  "shopping": "shopping",
-  "sports": "activity",
-  "history": "culture",
-  "nature": "outdoors",
-  "tech": "education",
-  "museum": "culture",
-  "nightlife": "social",
-  "yoga": "wellness",
-  "meditation": "wellness",
-  "beach": "outdoors",
-  "architecture": "culture",
-  "vintage": "shopping",
-  "crafts": "activity",
-  "gardening": "outdoors",
-  "cooking": "food",
-  "dancing": "activity",
-  "movies": "culture",
-  "theater": "culture",
-  "wine": "drink",
-  "beer": "drink",
-  "fitness": "wellness",
-  "running": "activity",
-  "festivals": "social",
-  "parks": "outdoors",
-  "markets": "shopping",
-  "bookstores": "shopping",
-  "cafes": "food",
-  "dessert": "food"
-};
+// Default interests for fallback
+const defaultInterests = [
+  "Coffee", "Food", "Shopping", "Art", "Music", 
+  "Nature", "Tech", "Sports", "Reading", "Nightlife",
+  "Wine", "Beer", "Yoga", "Hiking", "Museums",
+  "Photography", "Theater", "Dance", "Film", "History"
+];
 
-// Helper to get category and color for an interest
-function getCategoryAndColor(interestId: string): { category: string; color: string } {
-  const normalized = interestId.toLowerCase();
-  const category = interestCategories[normalized] || "default";
-  const color = interestColors[category] || interestColors.default;
-  return { category, color };
+// GET /api/interests - Get interests for a location
+export async function GET(request: NextRequest) {
+  // Create a unique request ID for tracking
+  const requestId = logger.createRequestId();
+  
+  try {
+    // Extract location from query params
+    const url = new URL(request.url);
+    const location = url.searchParams.get("location");
+    const refresh = url.searchParams.has("refresh");
+    const favCitiesParam = url.searchParams.get("favoriteCities");
+    
+    // Parse favorite cities if provided
+    let favoriteCities: string[] = [];
+    if (favCitiesParam) {
+      try {
+        favoriteCities = JSON.parse(favCitiesParam);
+        if (!Array.isArray(favoriteCities)) {
+          favoriteCities = [];
+        }
+      } catch (e) {
+        logger.warn(
+          LogCategory.API,
+          `Invalid favoriteCities parameter: ${favCitiesParam}`,
+          { favCitiesParam },
+          ['API_WARNING', 'INTERESTS']
+        );
+      }
+    }
+    
+    if (!location) {
+      // If no location provided, return an error
+      logger.error(
+        LogCategory.API,
+        "Missing location parameter",
+        { requestId },
+        ['API_ERROR', 'INTERESTS']
+      );
+      
+      return NextResponse.json({ 
+        error: "Location parameter is required",
+        requestId 
+      }, { status: 400 });
+    }
+    
+    logger.info(
+      LogCategory.API,
+      `Processing interests request for ${location}`,
+      { location, refresh, favoriteCities, requestId },
+      ['API_REQUEST', 'INTERESTS']
+    );
+    
+    // Check if we have cached interests for this location and it's not a forced refresh
+    const cacheKey = `${location.toLowerCase()}:${favoriteCities.sort().join(',')}`;
+    const cachedInterests = interestsCache[cacheKey];
+    const cacheValid = cachedInterests && 
+      (Date.now() - cachedInterests.timestamp < CACHE_TTL) && 
+      !refresh;
+    
+    if (cacheValid) {
+      // Return cached interests
+      logger.info(
+        LogCategory.CACHE,
+        `Cache hit for interests:${cacheKey}`,
+        { location, favoriteCities, count: cachedInterests.interests.length },
+        ['CACHE_HIT', 'INTERESTS']
+      );
+      
+      return NextResponse.json({ 
+        interests: cachedInterests.interests,
+        fromCache: true,
+        cachedAt: new Date(cachedInterests.timestamp).toISOString(),
+        requestId
+      });
+    }
+    
+    logger.info(
+      LogCategory.CACHE,
+      `Cache miss for interests:${cacheKey}`,
+      { location, favoriteCities },
+      ['CACHE_MISS', 'INTERESTS']
+    );
+    
+    // Generate interests using the LIM pipeline
+    let interests = await generateInterestsWithLIM(location, favoriteCities, requestId);
+    
+    // Cache the results
+    interestsCache[cacheKey] = {
+      interests,
+      timestamp: Date.now()
+    };
+    
+    logger.info(
+      LogCategory.CACHE,
+      `Cached interests for ${cacheKey}`,
+      { location, favoriteCities, count: interests.length },
+      ['CACHE_SET', 'INTERESTS']
+    );
+    
+    return NextResponse.json({ 
+      interests,
+      fromCache: false,
+      location,
+      favoriteCities,
+      requestId
+    });
+  } catch (error) {
+    logger.error(
+      LogCategory.API,
+      `Error fetching interests: ${error}`,
+      { error },
+      ['API_ERROR', 'INTERESTS']
+    );
+    
+    return NextResponse.json({ 
+      error: "Failed to fetch interests",
+      interests: defaultInterests,
+      requestId
+    }, { status: 500 });
+  }
 }
 
-// Get current season based on month
-function getCurrentSeason(): string {
-  const month = new Date().getMonth();
-  if (month >= 2 && month <= 4) return "Spring";
-  if (month >= 5 && month <= 7) return "Summer";
-  if (month >= 8 && month <= 10) return "Fall";
-  return "Winter";
-}
-
-// Create sample interests (seasonal based on month)
-async function generateInterestsForLocation(location: string): Promise<Interest[]> {
+/**
+ * Generate interests using the LIM pipeline
+ */
+async function generateInterestsWithLIM(
+  location: string, 
+  favoriteCities: string[] = [], 
+  requestId: string
+): Promise<string[]> {
   logger.info(
     LogCategory.INTEREST,
     `Generating interests for location: ${location}`,
-    { location },
+    { location, favoriteCities, requestId },
     ['INTEREST_GENERATION', 'LOCATION_BASED']
   );
   
   try {
-    // Check if we have available LLM providers
-    const availableProviders = llmClient.getAvailableProviders();
-    
-    if (availableProviders.length === 0) {
-      logger.warn(
-        LogCategory.LLM,
-        "No LLM providers available, falling back to sample data",
-        { location },
-        ['FALLBACK', 'NO_PROVIDERS']
-      );
-      return generateSampleInterests(location);
-    }
-    
-    // Get current month and season
-    const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+    // Get the current season for context
     const currentSeason = getCurrentSeason();
     
-    // Get the interest generation template
-    const template = getTemplate(TemplateType.INTEREST_GENERATION);
-    
-    // Process the template with the LLM
+    // Start timer for LLM request
     const endTimer = logger.startTimer(
       LogCategory.INTEREST,
       `Generating interests for ${location}`,
       ['INTEREST_GENERATION', 'LLM_REQUEST'],
     );
     
-    try {
-      // Call LLM with the template
-      const interests = await llmClient.processTemplate(
-        template,
-        {
-          location,
-          month: currentMonth,
-          season: currentSeason,
-          context: `Generate interests that would be relevant for users in ${location} during ${currentSeason}.`
-        },
-        {
-          provider: LLMProvider.GEMINI,
-          temperature: 0.7,
-          tags: ['INTEREST_GENERATION', 'LOCATION_BASED', location.toUpperCase().replace(/\s+/g, '_')]
-        }
+    // Initialize LLM client
+    const llmClient = new LLMClient();
+    
+    // Get the interest generation template
+    const template = getTemplate(TemplateType.INTEREST_GENERATION);
+    
+    // Fill the template with parameters
+    const params = {
+      location,
+      favoriteCities: favoriteCities.join(', '),
+      season: currentSeason,
+      currentDate: new Date().toISOString().split('T')[0],
+    };
+    
+    // Process the template using the LLM client
+    const result = await llmClient.processTemplate(template, params, {
+      temperature: 0.7,
+      tags: ['INTEREST_GENERATION', 'LOCATION_BASED', location.replace(/\s+/g, '_').toUpperCase()]
+    });
+    
+    // End the timer
+    await endTimer();
+    
+    // Extract interests from the LLM response
+    let interests: string[] = [];
+    
+    if (result && result.interests && Array.isArray(result.interests)) {
+      interests = result.interests;
+      
+      logger.info(
+        LogCategory.INTEREST,
+        `Generated ${interests.length} interests for ${location}`,
+        { location, interestCount: interests.length },
+        ['INTEREST_GENERATION', 'SUCCESS']
       );
-      
-      // Add random sizes for asymmetric grid
-      const sizes = ["sm", "md", "lg"];
-      const enhancedInterests = interests.map((interest: Interest) => ({
-        ...interest,
-        size: sizes[Math.floor(Math.random() * sizes.length)] as "sm" | "md" | "lg"
-      }));
-      
-      // End timer with success
-      await endTimer();
-      
-      return enhancedInterests;
-    } catch (error) {
-      // Log error and end timer
-      await endTimer();
+    } else {
+      logger.warn(
+        LogCategory.INTEREST,
+        `Invalid LLM response format for interests`,
+        { location, result },
+        ['INTEREST_GENERATION', 'INVALID_RESPONSE']
+      );
       
       // Fall back to sample data
-      logger.warn(
-        LogCategory.LLM,
-        `LLM request failed, falling back to sample data: ${error}`,
-        { location, error },
-        ['FALLBACK', 'LLM_ERROR']
-      );
-      
-      return generateSampleInterests(location);
+      interests = generateSampleInterests(location, favoriteCities);
     }
+    
+    return interests;
   } catch (error) {
+    // Log the error
     logger.error(
       LogCategory.INTEREST,
-      `Error generating interests: ${error}`,
-      { location, error },
-      ['ERROR', 'INTEREST_GENERATION']
+      `Error generating interests with LIM: ${error}`,
+      { error, location, favoriteCities },
+      ['INTEREST_GENERATION', 'ERROR']
     );
     
     // Fall back to sample data
-    return generateSampleInterests(location);
+    logger.warn(
+      LogCategory.LLM,
+      `LLM request failed, falling back to sample data: ${error}`,
+      { error, location },
+      ['FALLBACK', 'LLM_ERROR']
+    );
+    
+    return generateSampleInterests(location, favoriteCities);
   }
 }
 
-// Generate sample interests as fallback
-function generateSampleInterests(location: string): Interest[] {
-  const currentMonth = new Date().getMonth();
-  const isSummer = currentMonth >= 5 && currentMonth <= 8;
-  const isWinter = currentMonth === 11 || currentMonth === 0 || currentMonth === 1;
-  const isSpring = currentMonth >= 2 && currentMonth <= 4;
-  const isFall = currentMonth >= 9 && currentMonth <= 10;
+/**
+ * Generate sample interests for a location based on default data
+ */
+function generateSampleInterests(location: string, favoriteCities: string[] = []): string[] {
+  // Try to match with our predefined locations
+  const normalizedLocation = location.toLowerCase();
+  let interests: string[] = [];
   
-  // Base interests that are always available
-  const baseInterests = [
-    { id: "coffee", name: "Coffee", emoji: "☕", trending: true },
-    { id: "food", name: "Food", emoji: "🍽️", trending: true },
-    { id: "shopping", name: "Shopping", emoji: "🛍️", trending: false },
-    { id: "history", name: "History", emoji: "🏛️", trending: false },
-    { id: "art", name: "Art", emoji: "🎨", trending: false },
-    { id: "music", name: "Music", emoji: "🎵", trending: false },
-  ];
-  
-  // Seasonal interests
-  const seasonalInterests = [
-    // Summer interests
-    ...(isSummer ? [
-      { id: "beach", name: "Beach", emoji: "🏖️", trending: true },
-      { id: "hiking", name: "Hiking", emoji: "🥾", trending: true },
-      { id: "swimming", name: "Swimming", emoji: "🏊", trending: true },
-      { id: "festivals", name: "Festivals", emoji: "🎪", trending: true },
-      { id: "parks", name: "Parks", emoji: "🌳", trending: true },
-      { id: "ice-cream", name: "Ice Cream", emoji: "🍦", trending: true },
-    ] : []),
-    
-    // Winter interests
-    ...(isWinter ? [
-      { id: "skiing", name: "Skiing", emoji: "⛷️", trending: true },
-      { id: "hot-drinks", name: "Hot Drinks", emoji: "☕", trending: true },
-      { id: "holiday-markets", name: "Holiday Markets", emoji: "🎄", trending: true },
-      { id: "museums", name: "Museums", emoji: "🏛️", trending: true },
-      { id: "comfort-food", name: "Comfort Food", emoji: "🍲", trending: true },
-    ] : []),
-    
-    // Spring interests
-    ...(isSpring ? [
-      { id: "gardens", name: "Gardens", emoji: "🌷", trending: true },
-      { id: "picnics", name: "Picnics", emoji: "🧺", trending: true },
-      { id: "cycling", name: "Cycling", emoji: "🚲", trending: true },
-      { id: "brunch", name: "Brunch", emoji: "🥞", trending: true },
-      { id: "farmers-markets", name: "Farmers Markets", emoji: "🥕", trending: true },
-    ] : []),
-    
-    // Fall interests
-    ...(isFall ? [
-      { id: "foliage", name: "Fall Foliage", emoji: "🍂", trending: true },
-      { id: "pumpkin", name: "Pumpkin Patches", emoji: "🎃", trending: true },
-      { id: "cider", name: "Cider", emoji: "🍎", trending: true },
-      { id: "hiking", name: "Hiking", emoji: "🥾", trending: true },
-      { id: "baking", name: "Baking", emoji: "🥧", trending: true },
-    ] : []),
-  ];
-  
-  // Location-specific interests (very basic implementation for demo)
-  let locationInterests: Interest[] = [];
-  
-  if (location.toLowerCase().includes("san francisco")) {
-    locationInterests = [
-      { id: "tech", name: "Tech", emoji: "💻", trending: true },
-      { id: "sourdough", name: "Sourdough", emoji: "🍞", trending: true },
-      { id: "golden-gate", name: "Golden Gate", emoji: "🌉", trending: true },
-      { id: "fog", name: "Fog Chasing", emoji: "🌫️", trending: false },
-    ];
-  } else if (location.toLowerCase().includes("new york")) {
-    locationInterests = [
-      { id: "pizza", name: "Pizza", emoji: "🍕", trending: true },
-      { id: "broadway", name: "Broadway", emoji: "🎭", trending: true },
-      { id: "central-park", name: "Central Park", emoji: "🏞️", trending: true },
-      { id: "bagels", name: "Bagels", emoji: "🥯", trending: true },
-    ];
-  } else if (location.toLowerCase().includes("los angeles")) {
-    locationInterests = [
-      { id: "hiking", name: "Hiking", emoji: "🥾", trending: true },
-      { id: "beaches", name: "Beaches", emoji: "🏖️", trending: true },
-      { id: "movies", name: "Movie Spots", emoji: "🎬", trending: true },
-      { id: "celeb-spotting", name: "Celeb Spotting", emoji: "🤩", trending: false },
-    ];
-  }
-  
-  // Combine all interests, remove duplicates, and add metadata
-  const allInterests = [...baseInterests, ...seasonalInterests, ...locationInterests];
-  
-  // Create a Set of unique IDs to track duplicates
-  const uniqueIds = new Set<string>();
-  
-  return allInterests
-    .filter(interest => {
-      // Only keep the first occurrence of each interest ID
-      if (uniqueIds.has(interest.id)) {
-        return false;
-      }
-      uniqueIds.add(interest.id);
-      return true;
-    })
-    .map(interest => {
-      const { category, color } = getCategoryAndColor(interest.id);
-      // Random sizing for asymmetric grid
-      const size = ["sm", "md", "lg"][Math.floor(Math.random() * 3)] as "sm" | "md" | "lg";
-      
-      return {
-        ...interest,
-        category,
-        color,
-        size
-      };
-    });
-}
-
-export async function GET(request: NextRequest) {
-  // Create a request ID for tracking
-  const requestId = logger.createRequestId();
-  
-  // Get the location from query params
-  const searchParams = request.nextUrl.searchParams;
-  const location = searchParams.get("location") || "San Francisco";
-  const refresh = searchParams.has("refresh");
-  
-  // Start timer for the entire request
-  const endTimer = logger.startTimer(
-    LogCategory.API,
-    `GET /api/interests for ${location}`,
-    ['API', 'INTERESTS', 'GET'],
+  // Add interests for the primary location
+  const matchedLocation = Object.keys(locationInterests).find(
+    loc => loc.toLowerCase().includes(normalizedLocation) || 
+           normalizedLocation.includes(loc.toLowerCase())
   );
   
-  try {
-    logger.info(
-      LogCategory.API,
-      `Processing interests request for ${location}`,
-      { location, refresh, requestId },
-      ['API_REQUEST', 'INTERESTS']
-    );
-    
-    // Try to get from cache first (unless refresh is requested)
-    if (!refresh && redis) {
-      const cacheKey = `interests:${location.toLowerCase().replace(/\s+/g, "-")}`;
-      
-      try {
-        const cached = await redis.get<Interest[]>(cacheKey);
-        
-        if (cached) {
-          logger.info(
-            LogCategory.CACHE,
-            `Cache hit for interests:${location}`,
-            { location, count: cached.length },
-            ['CACHE_HIT', 'INTERESTS']
-          );
-          
-          await endTimer();
-          
-          return NextResponse.json({
-            interests: cached,
-            source: "cache",
-            requestId
-          });
-        } else {
-          logger.info(
-            LogCategory.CACHE,
-            `Cache miss for interests:${location}`,
-            { location },
-            ['CACHE_MISS', 'INTERESTS']
-          );
-        }
-      } catch (error) {
-        logger.error(
-          LogCategory.CACHE,
-          `Redis error: ${error}`,
-          { error, location },
-          ['REDIS_ERROR', 'INTERESTS']
-        );
+  if (matchedLocation) {
+    // Use predefined interests for this location
+    interests = [...locationInterests[matchedLocation]];
+  } else {
+    // Try to find a partial match
+    for (const [loc, locInterests] of Object.entries(locationInterests)) {
+      if (loc.toLowerCase().includes(normalizedLocation) || 
+          normalizedLocation.includes(loc.toLowerCase())) {
+        interests.push(...locInterests.slice(0, 5));
       }
     }
-    
-    // Generate interests for the location
-    const interests = await generateInterestsForLocation(location);
-    
-    // Store in Redis cache if available
-    if (redis) {
-      try {
-        await redis.set(`interests:${location.toLowerCase().replace(/\s+/g, "-")}`, interests, { ex: CACHE_TTL });
-        
-        logger.info(
-          LogCategory.CACHE,
-          `Cached interests for ${location}`,
-          { location, count: interests.length },
-          ['CACHE_SET', 'INTERESTS']
-        );
-      } catch (error) {
-        logger.error(
-          LogCategory.CACHE,
-          `Failed to cache interests: ${error}`,
-          { error, location },
-          ['CACHE_ERROR', 'INTERESTS']
-        );
-      }
-    }
-    
-    // End timer with success
-    await endTimer();
-    
-    // Return the interests
-    return NextResponse.json({
-      interests,
-      source: "generated",
-      requestId
-    });
-  } catch (error) {
-    // Log error and end timer
-    logger.error(
-      LogCategory.API,
-      `Error processing interests request: ${error}`,
-      { error, location },
-      ['API_ERROR', 'INTERESTS']
-    );
-    
-    await endTimer();
-    
-    return NextResponse.json(
-      { error: "Failed to fetch interests", requestId },
-      { status: 500 }
-    );
   }
+  
+  // Add some interests from favorite cities
+  const allFavCityInterests: string[] = [];
+  favoriteCities.forEach(city => {
+    const cityMatch = Object.keys(locationInterests).find(
+      loc => loc.toLowerCase().includes(city.toLowerCase()) || 
+             city.toLowerCase().includes(loc.toLowerCase())
+    );
+    
+    if (cityMatch && locationInterests[cityMatch]) {
+      // Take a random subset of interests from this city
+      const cityInterests = locationInterests[cityMatch];
+      const randomCount = Math.min(3, cityInterests.length);
+      const randomIndices = Array.from({ length: cityInterests.length }, (_, i) => i)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, randomCount);
+      
+      randomIndices.forEach(idx => {
+        allFavCityInterests.push(cityInterests[idx]);
+      });
+    }
+  });
+  
+  // Add favorite city interests
+  interests.push(...allFavCityInterests);
+  
+  // If still no matches, use default interests plus some randomized ones
+  if (interests.length < 5) {
+    interests = [...defaultInterests].sort(() => Math.random() - 0.5).slice(0, 15);
+  }
+  
+  // Deduplicate
+  interests = [...new Set(interests)];
+  
+  // Shuffle and limit to 20 interests
+  return interests.sort(() => Math.random() - 0.5).slice(0, 20);
+}
+
+/**
+ * Get the current season based on the date
+ */
+function getCurrentSeason(): string {
+  const now = new Date();
+  const month = now.getMonth();
+  
+  if (month >= 2 && month <= 4) return "Spring";
+  if (month >= 5 && month <= 7) return "Summer";
+  if (month >= 8 && month <= 10) return "Fall";
+  return "Winter";
 } 

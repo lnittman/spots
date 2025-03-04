@@ -117,12 +117,25 @@ export function InterestSelector({
         const cachedInterests = localStorage.getItem(localCacheKey);
         
         if (cachedInterests) {
-          setInterests(JSON.parse(cachedInterests));
+          const parsed = JSON.parse(cachedInterests);
+          // Convert string array to Interest objects if needed
+          if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+            const interestObjects = parsed.map((name: string) => ({
+              id: name.toLowerCase().replace(/\s+/g, '-'),
+              name,
+              emoji: getInterestEmoji(name),
+              color: getInterestColor(name),
+            }));
+            setInterests(interestObjects);
+          } else {
+            setInterests(parsed);
+          }
           setIsLoading(false);
           return;
         }
         
         // If not in localStorage, fetch from API
+        console.log(`[InterestSelector] Fetching interests for ${location}`);
         const response = await fetch(`/api/interests?location=${encodeURIComponent(location)}`);
         
         if (!response.ok) {
@@ -132,11 +145,21 @@ export function InterestSelector({
         const data = await response.json();
         
         if (data.interests && Array.isArray(data.interests)) {
+          console.log(`[InterestSelector] Received ${data.interests.length} interests for ${location}`);
+          
+          // Convert string array to Interest objects if necessary
+          const interestObjects = data.interests.map((name: string) => ({
+            id: name.toLowerCase().replace(/\s+/g, '-'),
+            name,
+            emoji: getInterestEmoji(name),
+            color: getInterestColor(name),
+          }));
+          
           // Cache in localStorage
-          localStorage.setItem(localCacheKey, JSON.stringify(data.interests));
+          localStorage.setItem(localCacheKey, JSON.stringify(interestObjects));
           
           // Update state
-          setInterests(data.interests);
+          setInterests(interestObjects);
         } else {
           // Fallback to shuffled default interests
           const shuffled = [...initialInterests]
@@ -145,7 +168,7 @@ export function InterestSelector({
           setInterests(shuffled);
         }
       } catch (err) {
-        console.error("Error fetching interests:", err);
+        console.error("[InterestSelector] Error fetching interests:", err);
         setError("Failed to load personalized interests");
         
         // Fallback to default interests
@@ -158,7 +181,10 @@ export function InterestSelector({
       }
     };
     
-    fetchInterests();
+    // Only fetch if we have a location
+    if (location) {
+      fetchInterests();
+    }
   }, [location, initialInterests]);
 
   useEffect(() => {
@@ -347,4 +373,63 @@ export function InterestSelector({
       )}
     </div>
   );
+}
+
+// Helper function to get emoji for an interest
+function getInterestEmoji(interest: string): string {
+  // Simple mapping of common interests to emojis
+  const emojiMap: Record<string, string> = {
+    "Coffee": "☕",
+    "Food": "🍽️",
+    "Shopping": "🛍️",
+    "Art": "🎨",
+    "Music": "🎵",
+    "Nature": "🌿",
+    "Tech": "💻",
+    "Sports": "⚽",
+    "Reading": "📚",
+    "Nightlife": "🌃",
+    "Wine": "🍷",
+    "Beer": "🍺",
+    "Hiking": "🥾",
+    "Museums": "🏛️",
+    "Photography": "📷",
+    "Beaches": "🏖️",
+    "Film": "🎬",
+    "Tacos": "🌮",
+  };
+  
+  // Try to find a direct match
+  if (emojiMap[interest]) {
+    return emojiMap[interest];
+  }
+  
+  // Try to find a partial match
+  for (const key of Object.keys(emojiMap)) {
+    if (interest.toLowerCase().includes(key.toLowerCase()) || 
+        key.toLowerCase().includes(interest.toLowerCase())) {
+      return emojiMap[key];
+    }
+  }
+  
+  // Default emoji
+  return "🔍";
+}
+
+// Helper function to get color for an interest
+function getInterestColor(interest: string): string {
+  // Simple hashing function to get consistent colors
+  let hash = 0;
+  for (let i = 0; i < interest.length; i++) {
+    hash = interest.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // Common colors that look good
+  const colors = [
+    "#4ECDC4", "#FF6B6B", "#FFD166", "#AAC789", "#45B7D1", 
+    "#F46036", "#E76F51", "#2A9D8F", "#6A994E", "#9B5DE5"
+  ];
+  
+  // Use the hash to select a color
+  return colors[Math.abs(hash) % colors.length];
 } 

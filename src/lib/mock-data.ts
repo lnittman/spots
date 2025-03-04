@@ -14,12 +14,14 @@ export interface Spot {
   interests: string[];
   priceRange: 1 | 2 | 3 | 4;
   rating: number;
+  reviewCount: number;
   imageUrl?: string;
   website?: string;
   phone?: string;
   tags: string[];
   popular?: boolean;
   verified?: boolean;
+  emoji?: string;
 }
 
 // San Francisco neighborhoods with approximate coordinates
@@ -73,12 +75,14 @@ export const mockSpots: Spot[] = [
     interests: ['coffee', 'work', 'reading'],
     priceRange: 2,
     rating: 4.7,
+    reviewCount: 100,
     imageUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://ritualcoffee.com',
     phone: '(415) 641-1011',
     tags: ['Coffee', 'Cafe', 'Workspace'],
     popular: true,
     verified: true,
+    emoji: '☕',
   },
   {
     id: 'dolores-park',
@@ -92,11 +96,13 @@ export const mockSpots: Spot[] = [
     interests: ['picnics', 'nature', 'social'],
     priceRange: 1,
     rating: 4.8,
+    reviewCount: 150,
     imageUrl: 'https://images.unsplash.com/photo-1551875466-db81a9dbd4f6?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://sfrecpark.org/parks-open-spaces/park-recreation-map/',
     tags: ['Park', 'Views', 'Outdoors'],
     popular: true,
     verified: true,
+    emoji: '🌳',
   },
   {
     id: 'bi-rite-creamery',
@@ -110,12 +116,14 @@ export const mockSpots: Spot[] = [
     interests: ['icecream', 'food', 'dessert'],
     priceRange: 2,
     rating: 4.5,
+    reviewCount: 80,
     imageUrl: 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://biritemarket.com/creamery/',
     phone: '(415) 626-5600',
     tags: ['Ice Cream', 'Dessert', 'Organic'],
     popular: true,
     verified: true,
+    emoji: '🍦',
   },
   {
     id: 'philz-coffee-castro',
@@ -129,11 +137,13 @@ export const mockSpots: Spot[] = [
     interests: ['coffee', 'work', 'social'],
     priceRange: 2,
     rating: 4.6,
+    reviewCount: 90,
     imageUrl: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?ixlib=rb-1.2.1&auto=format&fit=crop&w=1051&q=80',
     website: 'https://www.philzcoffee.com/',
     phone: '(415) 321-7366',
     tags: ['Coffee', 'Chill', 'Local'],
     verified: true,
+    emoji: '☕',
   },
   {
     id: 'sightglass-coffee-soma',
@@ -147,11 +157,13 @@ export const mockSpots: Spot[] = [
     interests: ['coffee', 'work', 'design'],
     priceRange: 2,
     rating: 4.5,
+    reviewCount: 70,
     imageUrl: 'https://images.unsplash.com/photo-1501747315-124a0eaca060?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://sightglasscoffee.com/',
     phone: '(415) 861-1313',
     tags: ['Coffee', 'Roastery', 'Design'],
     verified: true,
+    emoji: '☕',
   },
   {
     id: 'ferry-building',
@@ -165,12 +177,14 @@ export const mockSpots: Spot[] = [
     interests: ['food', 'shopping', 'farmers markets'],
     priceRange: 3,
     rating: 4.7,
+    reviewCount: 120,
     imageUrl: 'https://images.unsplash.com/photo-1546896978-c49d25982326?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://www.ferrybuildingmarketplace.com/',
     phone: '(415) 983-8000',
     tags: ['Food Hall', 'Market', 'Waterfront'],
     popular: true,
     verified: true,
+    emoji: '🍴',
   },
   {
     id: 'tonga-room',
@@ -184,12 +198,14 @@ export const mockSpots: Spot[] = [
     interests: ['cocktails', 'nightlife', 'dinner'],
     priceRange: 3,
     rating: 4.3,
+    reviewCount: 50,
     imageUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://www.tongaroom.com/',
     phone: '(415) 772-5278',
     tags: ['Tiki Bar', 'Unique', 'Cocktails'],
     popular: true,
     verified: true,
+    emoji: '🍹',
   },
   {
     id: 'musee-mecanique',
@@ -203,11 +219,13 @@ export const mockSpots: Spot[] = [
     interests: ['history', 'gaming', 'museums'],
     priceRange: 1,
     rating: 4.7,
+    reviewCount: 60,
     imageUrl: 'https://images.unsplash.com/photo-1534177616072-ef7dc120449d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'http://www.museemecanique.com/',
     phone: '(415) 346-2000',
     tags: ['Arcade', 'Vintage', 'Museum'],
     verified: true,
+    emoji: '🎮',
   },
   {
     id: 'tartine-bakery',
@@ -221,12 +239,14 @@ export const mockSpots: Spot[] = [
     interests: ['food', 'bakeries', 'sourdough'],
     priceRange: 2,
     rating: 4.6,
+    reviewCount: 70,
     imageUrl: 'https://images.unsplash.com/photo-1517433367423-c9e1351b44f1?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://tartinebakery.com/',
     phone: '(415) 487-2600',
     tags: ['Bakery', 'Pastries', 'Sourdough'],
     popular: true,
     verified: true,
+    emoji: '🥖',
   },
   {
     id: 'golden-gate-park',
@@ -240,11 +260,13 @@ export const mockSpots: Spot[] = [
     interests: ['nature', 'museums', 'gardens'],
     priceRange: 1,
     rating: 4.8,
+    reviewCount: 100,
     imageUrl: 'https://images.unsplash.com/photo-1571764840589-8fe6505d05b3?ixlib=rb-1.2.1&auto=format&fit=crop&w=1050&q=80',
     website: 'https://goldengatepark.com/',
     tags: ['Park', 'Nature', 'Recreation'],
     popular: true,
     verified: true,
+    emoji: '🌳',
   },
 ];
 
@@ -284,9 +306,11 @@ export function generateAdditionalSpots(count: number): Spot[] {
       interests: interests,
       priceRange: (Math.floor(Math.random() * 4) + 1) as 1 | 2 | 3 | 4,
       rating: 3 + Math.random() * 2,
+      reviewCount: Math.floor(Math.random() * 100) + 10,
       tags: [type.charAt(0).toUpperCase() + type.slice(1), neighborhood.name],
       popular: Math.random() > 0.8,
       verified: Math.random() > 0.3,
+      emoji: type.charAt(0).toUpperCase() + type.slice(1),
     });
   }
   

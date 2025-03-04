@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronLeft } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, RefreshCw, PlusCircle, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { InterestSelector } from "@/components/interest-selector";
 import { Input } from "@/components/ui/input";
 import { Interest } from "@/components/interest-selector";
+import { Badge } from "@/components/ui/badge";
 
 // Create a subset of common interests to use in our component
-const commonInterests: Interest[] = [
+const defaultInterests: Interest[] = [
   { id: "coffee", name: "Coffee", emoji: "☕", color: "#4ECDC4" },
   { id: "food", name: "Food", emoji: "🍽️", color: "#FF6B6B" },
   { id: "shopping", name: "Shopping", emoji: "🛍️", color: "#FFD166" },
@@ -20,6 +21,16 @@ const commonInterests: Interest[] = [
   { id: "tech", name: "Tech", emoji: "💻", color: "#4ECDC4" },
   { id: "sports", name: "Sports", emoji: "⚽", color: "#4ECDC4" },
   { id: "reading", name: "Reading", emoji: "📚", color: "#4ECDC4" },
+];
+
+// Popular cities for suggestions - expanded list for infinite scroll
+const popularCities = [
+  "San Francisco", "New York", "Los Angeles", "Chicago", "Seattle", 
+  "London", "Paris", "Tokyo", "Berlin", "Sydney", "Toronto",
+  "Barcelona", "Amsterdam", "Rome", "Miami", "Austin", "Portland",
+  "Nashville", "Boston", "New Orleans", "Vancouver", "Dubai", 
+  "Singapore", "Hong Kong", "Mexico City", "Montreal", "Madrid", 
+  "Copenhagen", "Vienna", "Stockholm", "Dublin"
 ];
 
 // Log analytics data for LIM pipeline improvement
@@ -52,9 +63,13 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [animate, setAnimate] = useState(false);
-  const [userLocation, setUserLocation] = useState("San Francisco");
+  const [userLocation, setUserLocation] = useState("Los Angeles"); // Default to Los Angeles
+  const [favoriteCities, setFavoriteCities] = useState<string[]>([]);
+  const [newCityInput, setNewCityInput] = useState("");
   const [detectedLocation, setDetectedLocation] = useState("");
   const [loadingLocation, setLoadingLocation] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [commonInterests, setCommonInterests] = useState<Interest[]>(defaultInterests);
   
   // Detect user's location on mount (simulated)
   useEffect(() => {
@@ -63,11 +78,68 @@ export default function OnboardingPage() {
         // In production, this would use geolocation API + reverse geocoding
         // For demo, we'll simulate a delay and a detected location
         await new Promise(resolve => setTimeout(resolve, 1500));
-        const detected = "San Francisco"; // Simulated result
-        setDetectedLocation(detected);
-        setUserLocation(detected);
+        
+        // Attempt to get user's location from browser API
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              const { latitude, longitude } = position.coords;
+              
+              // In production, we would use a reverse geocoding service here
+              // For demo, we'll simulate a result based on known coordinates
+              
+              // Los Angeles: roughly 34.0522° N, 118.2437° W
+              // San Francisco: roughly 37.7749° N, 122.4194° W
+              // New York: roughly 40.7128° N, 74.0060° W
+              
+              let detected = "Los Angeles"; // Default fallback
+              
+              // Simple coordinate-based matching for demo
+              if (latitude > 37 && latitude < 38 && longitude < -122 && longitude > -123) {
+                detected = "San Francisco";
+              } else if (latitude > 40 && latitude < 41 && longitude < -73 && longitude > -75) {
+                detected = "New York";
+              } else if (latitude > 33 && latitude < 35 && longitude < -118 && longitude > -119) {
+                detected = "Los Angeles";
+              }
+              
+              console.log("[LOCATION] [DETECTION] User location detected:", detected);
+              setDetectedLocation(detected);
+              setUserLocation(detected);
+              
+              // Fetch interests for the detected location
+              fetchInterestsForLocation(detected);
+            },
+            (error) => {
+              console.error("[LOCATION] [ERROR] Error getting location:", error);
+              // Fall back to "Los Angeles" if geolocation fails
+              const fallback = "Los Angeles";
+              setDetectedLocation(fallback);
+              setUserLocation(fallback);
+              
+              // Fetch interests for the fallback location
+              fetchInterestsForLocation(fallback);
+            }
+          );
+        } else {
+          // Geolocation not supported, use fallback
+          console.log("[LOCATION] [UNSUPPORTED] Geolocation not supported by browser");
+          const fallback = "Los Angeles";
+          setDetectedLocation(fallback);
+          setUserLocation(fallback);
+          
+          // Fetch interests for the fallback location
+          fetchInterestsForLocation(fallback);
+        }
       } catch (error) {
-        console.error("Error detecting location:", error);
+        console.error("[LOCATION] [ERROR] Error detecting location:", error);
+        // Use fallback
+        const fallback = "Los Angeles";
+        setDetectedLocation(fallback);
+        setUserLocation(fallback);
+        
+        // Fetch interests for the fallback location
+        fetchInterestsForLocation(fallback);
       } finally {
         setLoadingLocation(false);
       }
@@ -81,12 +153,137 @@ export default function OnboardingPage() {
     setAnimate(true);
   }, []);
 
+  // Fetch interests for a specific location, with option to force refresh
+  const fetchInterestsForLocation = async (location: string, forceRefresh = false) => {
+    if (!location) return;
+    
+    console.log(`[INTEREST] [FETCH] Fetching interests for ${location}${forceRefresh ? ' with refresh' : ''}`);
+    setIsLoading(true);
+    
+    try {
+      // Prepare favorite cities parameter if we have any
+      const favCitiesParam = favoriteCities.length > 0 
+        ? `&favoriteCities=${encodeURIComponent(JSON.stringify(favoriteCities))}` 
+        : '';
+      
+      // Add a timestamp to force refresh if needed
+      const refreshParam = forceRefresh ? `&refresh=${Date.now()}` : '';
+      
+      // Make the API request with all parameters
+      const url = `/api/interests?location=${encodeURIComponent(location)}${favCitiesParam}${refreshParam}`;
+      console.log(`[INTEREST] [REQUEST] ${url}`);
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch interests: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.interests && Array.isArray(data.interests)) {
+        console.log(`[INTEREST] [RECEIVED] Received ${data.interests.length} interests for ${location}`);
+        
+        // Get recommended interests for this location
+        const recommendedInterests = data.interests.slice(0, 15);
+        
+        // Update common interests to show these recommendations
+        setCommonInterests(
+          recommendedInterests.map((name: string) => ({
+            id: name.toLowerCase().replace(/\s+/g, '-'),
+            name: name,
+            emoji: getInterestEmoji(name),
+            color: getInterestColor(name)
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("[INTEREST] [ERROR] Error fetching interests:", error);
+      // Keep default common interests if fetch fails
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Helper function to get emoji for an interest
+  const getInterestEmoji = (interest: string): string => {
+    // Simple mapping of common interests to emojis
+    const emojiMap: Record<string, string> = {
+      "Coffee": "☕",
+      "Food": "🍽️",
+      "Shopping": "🛍️",
+      "Art": "🎨",
+      "Music": "🎵",
+      "Nature": "🌿",
+      "Tech": "💻",
+      "Sports": "⚽",
+      "Reading": "📚",
+      "Nightlife": "🌃",
+      "Wine": "🍷",
+      "Beer": "🍺",
+      "Hiking": "🥾",
+      "Museums": "🏛️",
+      "Photography": "📷",
+      "Beaches": "🏖️",
+      "Film": "🎬",
+      "Tacos": "🌮",
+    };
+    
+    // Try to find a direct match
+    if (emojiMap[interest]) {
+      return emojiMap[interest];
+    }
+    
+    // Try to find a partial match
+    for (const key of Object.keys(emojiMap)) {
+      if (interest.toLowerCase().includes(key.toLowerCase()) || 
+          key.toLowerCase().includes(interest.toLowerCase())) {
+        return emojiMap[key];
+      }
+    }
+    
+    // Default emoji
+    return "🔍";
+  };
+  
+  const getInterestColor = (interest: string): string => {
+    // Simple hashing function to get consistent colors
+    let hash = 0;
+    for (let i = 0; i < interest.length; i++) {
+      hash = interest.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Common colors that look good
+    const colors = [
+      "#4ECDC4", "#FF6B6B", "#FFD166", "#AAC789", "#45B7D1", 
+      "#F46036", "#E76F51", "#2A9D8F", "#6A994E", "#9B5DE5"
+    ];
+    
+    // Use the hash to select a color
+    return colors[Math.abs(hash) % colors.length];
+  };
+  
+  const handleRefreshInterests = () => {
+    fetchInterestsForLocation(userLocation, true);
+  };
+
   const handleInterestChange = (interests: string[]) => {
     setSelectedInterests(interests);
     
     // Find the full interest details for the selected interests
     const interestDetails = interests.map(id => {
-      return commonInterests.find((interest: Interest) => interest.id === id) || { id, name: id, emoji: "🔍" };
+      // Look up in commonInterests first
+      const foundInterest = commonInterests.find((interest: Interest) => interest.id === id);
+      if (foundInterest) return foundInterest;
+      
+      // If not found, create a new interest object
+      const name = id.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      return {
+        id,
+        name,
+        emoji: getInterestEmoji(name),
+        color: getInterestColor(name)
+      };
     }).filter(Boolean) as Interest[];
     
     setSelectedInterestDetails(interestDetails);
@@ -113,6 +310,7 @@ export default function OnboardingPage() {
         action: "step_complete",
         step: 1,
         location: userLocation,
+        favorite_cities: favoriteCities,
         selected_interests: selectedInterests
       });
       
@@ -136,6 +334,7 @@ export default function OnboardingPage() {
           type: "onboarding_complete",
           timestamp: new Date().toISOString(),
           location: userLocation,
+          favorite_cities: favoriteCities,
           selected_interests: selectedInterests,
           interest_details: selectedInterestDetails
         });
@@ -148,7 +347,8 @@ export default function OnboardingPage() {
           },
           body: JSON.stringify({
             interests: selectedInterests,
-            location: userLocation
+            location: userLocation,
+            favoriteCities
           }),
         });
         
@@ -191,6 +391,35 @@ export default function OnboardingPage() {
     });
   };
 
+  // Handle adding a new favorite city
+  const handleAddFavoriteCity = () => {
+    if (!newCityInput.trim() || favoriteCities.includes(newCityInput.trim())) {
+      return;
+    }
+    
+    setFavoriteCities([...favoriteCities, newCityInput.trim()]);
+    setNewCityInput("");
+    
+    // Log analytics
+    logAnalyticsData({
+      type: "favorite_city_added",
+      action: "add",
+      city: newCityInput.trim()
+    });
+  };
+  
+  // Handle removing a favorite city
+  const handleRemoveFavoriteCity = (city: string) => {
+    setFavoriteCities(favoriteCities.filter(c => c !== city));
+    
+    // Log analytics
+    logAnalyticsData({
+      type: "favorite_city_removed",
+      action: "remove",
+      city
+    });
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="border-b">
@@ -198,27 +427,18 @@ export default function OnboardingPage() {
           {step > 1 && (
             <Button 
               variant="ghost" 
-              size="sm" 
-              className="gap-1 absolute left-4" 
+              size="icon" 
+              className="absolute left-2" 
               onClick={() => {
                 setAnimate(false);
                 setTimeout(() => {
                   setStep(1);
                   setAnimate(true);
-                  
-                  // Log going back to step 1
-                  logAnalyticsData({
-                    type: "onboarding_progress",
-                    action: "step_back",
-                    from_step: 2,
-                    to_step: 1
-                  });
                 }, 300);
               }}
-              disabled={loading}
             >
               <ChevronLeft className="h-4 w-4" />
-              Back
+              <span className="sr-only">Back</span>
             </Button>
           )}
           <div className="flex items-center">
@@ -228,165 +448,233 @@ export default function OnboardingPage() {
         </div>
       </header>
 
-      <main className="flex-1 container max-w-4xl py-6 px-4 sm:py-10">
-        <div className="max-w-2xl mx-auto">
-          <div 
-            className={`bg-background rounded-lg border p-6 shadow-sm transition-all duration-500 ${
-              animate ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-            }`}
-          >
-            <div className="space-y-1 sm:space-y-2 mb-4 sm:mb-6">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome to Spots</h1>
-              <p className="text-muted-foreground text-sm">
-                Let's personalize your experience by understanding your interests
-              </p>
-            </div>
-
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between items-center">
-                <div className="font-medium text-sm">Step {step} of 2</div>
-                <div className="text-xs text-muted-foreground">
-                  {step === 1 ? "Select interests" : "Review and confirm"}
-                </div>
+      <main className="flex-1 container max-w-5xl py-8 px-4">
+        <div className={`transition-opacity duration-300 ${animate ? 'opacity-100' : 'opacity-0'}`}>
+          {step === 1 ? (
+            <div className="space-y-8">
+              <div className="space-y-2 text-center">
+                <h1 className="text-2xl font-bold tracking-tight">Welcome to Spots!</h1>
+                <p className="text-muted-foreground">
+                  Tell us about what you're interested in to get personalized spot recommendations.
+                </p>
               </div>
-              <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">
-                <div 
-                  className="bg-primary h-full transition-all duration-500 ease-in-out"
-                  style={{ width: `${(step / 2) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-
-            {step === 1 && (
-              <div className={`mt-4 space-y-6 transition-all duration-300 ${
-                animate ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-              }`}>
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-4">
-                    <div className="flex-grow space-y-1">
-                      <label htmlFor="location" className="text-sm font-medium text-muted-foreground">Your location</label>
-                      <Input
-                        id="location"
-                        type="text"
-                        value={userLocation}
-                        onChange={handleLocationChange}
-                        placeholder="Enter your city"
-                        className="w-full"
-                      />
-                    </div>
-                    {loadingLocation ? (
-                      <div className="self-center sm:self-end text-xs text-muted-foreground flex items-center gap-1 h-9 sm:mb-0.5">
-                        <div className="w-3 h-3 rounded-full border-2 border-t-transparent border-primary animate-spin"></div>
-                        Detecting location...
-                      </div>
-                    ) : detectedLocation ? (
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex justify-between items-center">
+                    <span>Your Location</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={handleRefreshInterests}
+                      disabled={isLoading}
+                      className="h-8"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                      {isLoading ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={userLocation}
+                      onChange={handleLocationChange}
+                      placeholder="Enter your primary location..."
+                      className="flex-1"
+                    />
+                    {detectedLocation && userLocation !== detectedLocation && !loadingLocation && (
                       <Button 
                         variant="outline" 
-                        size="sm" 
-                        className="h-9 self-start sm:self-end text-xs"
                         onClick={handleUseDetectedLocation}
+                        className="whitespace-nowrap"
                       >
-                        Use detected: {detectedLocation}
+                        Use {detectedLocation}
                       </Button>
-                    ) : null}
+                    )}
+                    {loadingLocation && (
+                      <Button variant="outline" disabled>
+                        <span className="animate-pulse">Detecting...</span>
+                      </Button>
+                    )}
                   </div>
+                </div>
+                
+                {/* Favorite Cities Section */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium leading-none">
+                    Favorite Cities (Optional)
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Add cities you plan to visit or want recommendations for.
+                  </p>
+                  
+                  <div className="flex gap-2">
+                    <Input
+                      value={newCityInput}
+                      onChange={(e) => setNewCityInput(e.target.value)}
+                      placeholder="Enter a city..."
+                      className="flex-1"
+                    />
+                    <Button 
+                      variant="outline" 
+                      onClick={handleAddFavoriteCity}
+                      disabled={!newCityInput.trim() || favoriteCities.includes(newCityInput.trim())}
+                    >
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </div>
+                  
+                  {/* Display favorite cities */}
+                  {favoriteCities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {favoriteCities.map(city => (
+                        <Badge key={city} variant="secondary" className="flex items-center gap-1">
+                          {city}
+                          <button 
+                            onClick={() => handleRemoveFavoriteCity(city)}
+                            className="ml-1 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-3 w-3" />
+                            <span className="sr-only">Remove {city}</span>
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Suggestions with horizontal scrolling */}
+                  {favoriteCities.length < 5 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1">Suggestions:</p>
+                      <div className="relative">
+                        <div className="overflow-x-auto pb-2 scrollbar-hide">
+                          <div className="flex space-x-1 w-max px-1">
+                            {popularCities
+                              .filter(city => 
+                                city !== userLocation && 
+                                !favoriteCities.includes(city)
+                              )
+                              .map(city => (
+                                <Badge 
+                                  key={city} 
+                                  variant="outline" 
+                                  className="cursor-pointer hover:bg-secondary whitespace-nowrap"
+                                  onClick={() => setFavoriteCities([...favoriteCities, city])}
+                                >
+                                  + {city}
+                                </Badge>
+                              ))
+                            }
+                          </div>
+                        </div>
+                        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none"></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <h2 className="text-base font-semibold">What are you interested in?</h2>
-                  <p className="text-muted-foreground text-xs">
-                    Select up to 5 interests to help us recommend places you'll love. These are tailored to {userLocation}.
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                    Select Your Interests
+                  </label>
+                  
+                  <div className="relative">
+                    <div className="overflow-x-auto overflow-y-visible pb-2 scrollbar-hide">
+                      <div className="overflow-y-visible flex-1">
+                        <InterestSelector
+                          interests={commonInterests}
+                          selectedInterests={selectedInterests}
+                          onInterestChange={handleInterestChange}
+                          location={userLocation}
+                        />
+                      </div>
+                    </div>
+                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none"></div>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground text-right">
+                    Selected: {selectedInterests.length}/5
                   </p>
                 </div>
-
-                <InterestSelector 
-                  selectedInterests={selectedInterests}
-                  onInterestChange={handleInterestChange}
-                  maxSelections={5}
-                  location={userLocation}
-                  className="py-2"
-                />
-
-                <div className="pt-2">
-                  <Button 
-                    onClick={handleNext} 
-                    disabled={selectedInterests.length === 0}
-                    className="w-full gap-1"
-                    size="default"
-                  >
-                    Continue <ArrowRight className="h-4 w-4" />
-                  </Button>
+              </div>
+              
+              <div className="flex justify-end">
+                <Button 
+                  onClick={handleNext}
+                  disabled={selectedInterests.length === 0}
+                >
+                  Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <div className="space-y-2 text-center">
+                <h1 className="text-2xl font-bold tracking-tight">Spots selected!</h1>
+                <p className="text-muted-foreground">
+                  You've selected {selectedInterests.length} interest{selectedInterests.length !== 1 && 's'}.
+                </p>
+              </div>
+              
+              <div className="bg-muted p-6 rounded-lg">
+                <h2 className="font-semibold mb-3">Your interests:</h2>
+                <div className="flex flex-wrap gap-2">
+                  {selectedInterestDetails.map((interest) => (
+                    <div 
+                      key={interest.id} 
+                      className="bg-background rounded-full px-3 py-1 text-sm flex items-center space-x-1"
+                    >
+                      <span>{interest.emoji}</span>
+                      <span>{interest.name}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-4 flex flex-col space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span>Your location: {userLocation}</span>
+                  </div>
+                  
+                  {favoriteCities.length > 0 && (
+                    <div className="flex items-start space-x-2">
+                      <Check className="h-4 w-4 text-green-500 mt-1" />
+                      <div>
+                        <span>Favorite cities: </span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {favoriteCities.map(city => (
+                            <Badge key={city} variant="secondary">
+                              {city}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-
-            {step === 2 && (
-              <div className={`mt-4 space-y-5 transition-all duration-300 ${
-                animate ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-              }`}>
-                <div className="space-y-1">
-                  <h2 className="text-base font-semibold">Almost there!</h2>
-                  <p className="text-muted-foreground text-xs">
-                    We'll use these interests to recommend places in {userLocation} that match your preferences
-                  </p>
-                </div>
-
-                <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-3">
-                  <div className="font-medium text-sm flex items-center gap-2">
-                    <Check className="h-4 w-4 text-primary" />
-                    Your selected interests
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedInterestDetails.length > 0 ? (
-                      selectedInterestDetails.map(interest => (
-                        <div 
-                          key={interest.id} 
-                          className={`bg-[${interest.color || "#4ECDC4"}]/10 text-[${interest.color || "#4ECDC4"}] px-3 py-1 rounded-full text-sm flex items-center gap-1`}
-                        >
-                          <span className="mr-1">{interest.emoji}</span>
-                          <span>{interest.name}</span>
-                          {interest.trending && <span className="ml-1 text-[#FF6B6B]">↑</span>}
-                        </div>
-                      ))
-                    ) : (
-                      selectedInterests.map(interest => (
-                        <div 
-                          key={interest} 
-                          className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center gap-1"
-                        >
-                          <span>{interest}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-4">
-                  <Button 
-                    onClick={handleNext} 
-                    disabled={loading}
-                    className="w-full gap-1"
-                    size="lg"
-                  >
-                    {loading ? (
-                      <span className="flex items-center gap-2">
-                        <span className="h-4 w-4 border-2 border-background border-t-transparent rounded-full animate-spin"></span>
-                        Setting up your profile...
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        Complete Setup <ArrowRight className="h-4 w-4" />
-                      </span>
-                    )}
-                  </Button>
-                </div>
+              
+              <div className="flex justify-end">
+                <Button onClick={handleNext} disabled={loading}>
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-background" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      Finish Setup
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
+                </Button>
               </div>
-            )}
-          </div>
-          
-          <div className="mt-8 text-center text-sm text-muted-foreground">
-            <p>Already have an account? <Link href="/login" className="text-primary hover:underline">Sign in</Link></p>
-          </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

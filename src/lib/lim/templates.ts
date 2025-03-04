@@ -674,27 +674,25 @@ Focus on making these recommendations more seasonally appropriate while preservi
 };
 
 /**
- * Fill a template with parameters
+ * Fill a template with parameters, providing defaults for missing values
  * @param template The template to fill
  * @param params Parameters to fill the template with
  * @returns The filled template
  */
 export function fillTemplate(template: PromptTemplate, params: Record<string, any>): string {
-  let filledTemplate = template.userPromptTemplate;
+  let prompt = template.userPromptTemplate;
   
-  // Replace all parameters in the template
-  Object.entries(params).forEach(([key, value]) => {
-    const regex = new RegExp(`{{${key}}}`, 'g');
-    filledTemplate = filledTemplate.replace(regex, String(value));
-  });
+  // Extract all parameters from the template using regex
+  const paramMatches = prompt.match(/\{\{([^{}]+)\}\}/g) || [];
+  const paramNames = paramMatches.map(match => match.substring(2, match.length - 2).trim());
   
-  // Check for any remaining unfilled parameters
-  const remainingParams = filledTemplate.match(/{{([^}]+)}}/g);
-  if (remainingParams) {
-    console.warn(`Warning: Template has unfilled parameters: ${remainingParams.join(', ')}`);
+  // Fill in parameters
+  for (const paramName of paramNames) {
+    const value = params[paramName] ?? ''; // Default to empty string if parameter is missing
+    prompt = prompt.replace(new RegExp(`\\{\\{${paramName}\\}\\}`, 'g'), value);
   }
   
-  return filledTemplate;
+  return prompt;
 }
 
 /**
@@ -703,7 +701,11 @@ export function fillTemplate(template: PromptTemplate, params: Record<string, an
  * @returns The template
  */
 export function getTemplate(type: TemplateType): PromptTemplate {
-  return templates[type];
+  const template = templates[type];
+  if (!template) {
+    throw new Error(`Template not found for type: ${type}`);
+  }
+  return template;
 }
 
 /**
