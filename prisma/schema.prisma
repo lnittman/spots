@@ -1,0 +1,226 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and personalization
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  location      String?
+  bio           String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  interests     UserInterest[]
+  checkIns      CheckIn[]
+  collections   Collection[]
+  favorites     Favorite[]
+}
+
+// Interest categories that users can select
+model Interest {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  trending    Boolean   @default(false)
+  trendScore  Float     @default(0)
+  isSeasonal  Boolean   @default(false)
+  category    String?
+  imageUrl    String?
+  iconName    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  users       UserInterest[]
+  spots       SpotInterest[]
+  recommendations Recommendation[]
+}
+
+// Many-to-many relation between users and interests
+model UserInterest {
+  id         String   @id @default(cuid())
+  userId     String
+  interestId String
+  strength   Float    @default(1.0) // How strongly the user likes this interest (1-5)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interestId])
+  @@index([userId])
+  @@index([interestId])
+}
+
+// Location/Spot model
+model Spot {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  address     String?
+  city        String
+  state       String?
+  country     String
+  latitude    Float
+  longitude   Float
+  rating      Float?   @default(0)
+  checkIns    Int      @default(0)
+  imageUrl    String?
+  websiteUrl  String?
+  openingHours Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  interests   SpotInterest[]
+  checkInRecords CheckIn[]
+  favorites   Favorite[]
+  tags        SpotTag[]
+  recommendations Recommendation[]
+}
+
+// Many-to-many relation between spots and interests
+model SpotInterest {
+  id         String   @id @default(cuid())
+  spotId     String
+  interestId String
+  strength   Float    @default(1.0) // How relevant the spot is to this interest (1-5)
+  createdAt  DateTime @default(now())
+
+  // Relations
+  spot       Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([spotId, interestId])
+  @@index([spotId])
+  @@index([interestId])
+}
+
+// Check-in model for user activity
+model CheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  spotId    String
+  rating    Int?     // Optional rating 1-5
+  comment   String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spot      Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([spotId])
+}
+
+// Collections (lists of spots) created by users
+model Collection {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  isPrivate   Boolean  @default(false)
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spots       CollectionSpot[]
+
+  @@index([userId])
+}
+
+// Many-to-many relation between collections and spots
+model CollectionSpot {
+  id           String   @id @default(cuid())
+  collectionId String
+  spotId       String
+  addedAt      DateTime @default(now())
+  notes        String?
+
+  // Relations
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  
+  @@unique([collectionId, spotId])
+  @@index([collectionId])
+}
+
+// User favorites
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  spotId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spot      Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, spotId])
+  @@index([userId])
+  @@index([spotId])
+}
+
+// Tags for categorizing spots
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  category  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  spots     SpotTag[]
+}
+
+// Many-to-many relation between spots and tags
+model SpotTag {
+  id        String   @id @default(cuid())
+  spotId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  // Relations
+  spot      Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id])
+
+  @@unique([spotId, tagId])
+  @@index([spotId])
+  @@index([tagId])
+}
+
+// AI-generated recommendations
+model Recommendation {
+  id          String   @id @default(cuid())
+  spotId      String
+  interestId  String
+  location    String   // City or region for which this was recommended
+  description String?  // AI-generated explanation of why this is recommended
+  score       Float    @default(0) // Relevance score
+  source      String?  // Which model or pipeline generated this
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  // Relations
+  spot        Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  interest    Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@index([spotId])
+  @@index([interestId])
+  @@index([location])
+}
