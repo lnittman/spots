@@ -145,3 +145,47 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;             /* Chrome, Safari and Opera */
 }
+
+/* MapBox custom styles */
+.map-marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+  transition: transform 0.2s ease;
+}
+
+.map-marker:hover {
+  transform: scale(1.2);
+}
+
+.marker-popup {
+  padding: 8px;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.marker-popup strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.marker-popup p {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.mapboxgl-popup {
+  max-width: 200px;
+}
+
+.mapboxgl-popup-content {
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.mapboxgl-popup-close-button {
+  font-size: 16px;
+  color: #666;
+}

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import prisma from "@/lib/db/prisma";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { userProfiles } from "../profile/route";
 
 // Extend the session user type to include id
 declare module "next-auth" {
@@ -29,84 +30,54 @@ type InterestRecord = {
   [key: string]: any;
 }
 
+// Mock database for user interests (in a real app, this would be a database)
+export const userInterests: Record<string, string[]> = {};
+
 export async function POST(request: NextRequest) {
   try {
     // Get the user session
-    const session = await getServerSession(authOptions as any) as any;
+    const session = await getServerSession();
     
-    if (!session || !session.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
     
     // Parse and validate the request body
     const body = await request.json();
     const { interests, location } = interestsSchema.parse(body);
     
-    // Update user's location if provided and mark onboarding as complete
+    // Store in mock database
+    const userEmail = session.user.email;
+    userInterests[userEmail] = interests;
+    
+    // For storing in profile if available
     if (location) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { 
-          location,
-          onboardingComplete: true // Mark onboarding as complete
-        },
-      });
-    } else {
-      // Just update onboardingComplete status
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { 
-          onboardingComplete: true // Mark onboarding as complete
-        },
-      });
+      try {
+        // Update the profile in the shared mock database
+        const currentProfile = userProfiles[userEmail] || {
+          name: session.user.name,
+          email: userEmail,
+          location: null,
+          emoji: null,
+          pronouns: null,
+          bio: null
+        };
+        
+        userProfiles[userEmail] = {
+          ...currentProfile,
+          location: location
+        };
+        
+        console.log(`Location updated to ${location} for user ${userEmail}`);
+      } catch (e) {
+        console.error("Error updating location:", e);
+      }
     }
-    
-    // Delete existing user interests
-    await prisma.userInterest.deleteMany({
-      where: { userId: session.user.id },
-    });
-    
-    // Create or get interest records
-    const interestRecords = await Promise.all(
-      interests.map(async (interestName) => {
-        // Try to find existing interest
-        let interest = await prisma.interest.findUnique({
-          where: { name: interestName },
-        });
-        
-        // Create if not exists
-        if (!interest) {
-          interest = await prisma.interest.create({
-            data: {
-              name: interestName,
-              description: `Interest in ${interestName}`,
-              trending: false,
-              trendScore: 0,
-            },
-          });
-        }
-        
-        return interest;
-      })
-    );
-    
-    // Create user interest relations
-    await Promise.all(
-      interestRecords.map((interest: InterestRecord) =>
-        prisma.userInterest.create({
-          data: {
-            userId: session.user.id as string,
-            interestId: interest.id,
-            strength: 1.0, // Default strength
-          },
-        })
-      )
-    );
     
     return NextResponse.json({ 
       success: true,
       message: "Interests saved successfully",
-      interests: interestRecords.map((i: InterestRecord) => i.name),
+      interests: interests,
     });
   } catch (error) {
     console.error("Error saving user interests:", error);
@@ -126,31 +97,18 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Get the user session
-    const session = await getServerSession(authOptions as any) as any;
-    
-    if (!session || !session.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const session = await getServerSession();
+
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-    
-    // Fetch user's interests from database
-    const userInterests = await prisma.userInterest.findMany({
-      where: { userId: session.user.id },
-      include: { interest: true }
-    });
-    
-    // Extract and return interest names
-    const interests = userInterests.map((ui: { interest: { name: string } }) => ui.interest.name);
-    
-    return NextResponse.json({ 
-      interests,
-      count: interests.length
-    });
+
+    const userEmail = session.user.email;
+    const interests = userInterests[userEmail] || [];
+
+    return NextResponse.json({ interests });
   } catch (error) {
-    console.error("Error getting user interests:", error);
-    
-    return NextResponse.json({ 
-      error: "Failed to fetch interests" 
-    }, { status: 500 });
+    console.error("Error fetching interests:", error);
+    return NextResponse.json({ error: "Failed to fetch interests" }, { status: 500 });
   }
 } 

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { InterestSelector } from "@/components/interest-selector";
 import { Input } from "@/components/ui/input";
 import { Interest } from "@/components/interest-selector";
-import { defaultInterests } from "@/components/interest-selector";
 
 // Create a subset of common interests to use in our component
 const commonInterests: Interest[] = [
@@ -87,7 +86,7 @@ export default function OnboardingPage() {
     
     // Find the full interest details for the selected interests
     const interestDetails = interests.map(id => {
-      return defaultInterests.find(interest => interest.id === id) || { id, name: id, emoji: "🔍" };
+      return commonInterests.find((interest: Interest) => interest.id === id) || { id, name: id, emoji: "🔍" };
     }).filter(Boolean) as Interest[];
     
     setSelectedInterestDetails(interestDetails);

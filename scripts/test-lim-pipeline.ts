@@ -12,7 +12,7 @@
 
 import { LLMClient, LLMProvider } from '../src/lib/lim/llm-client';
 import { LIMLogger, LogCategory } from '../src/lib/lim/logging';
-import { OutputFormat } from '../src/lib/lim/templates';
+import { OutputFormat, TemplateType } from '../src/lib/lim/templates';
 // Import dotenv using require since we're in a script context
 const dotenv = require('dotenv');
 
@@ -20,8 +20,8 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Initialize logger and LLM client
-// Note: We're assuming that LIMLogger is available and properly implemented
-const logger = new LIMLogger();
+// Get logger instance since the constructor is private
+const logger = LIMLogger.getInstance();
 const llmClient = new LLMClient();
 
 // Define a simple test request
@@ -46,9 +46,17 @@ async function testOpenRouterIntegration() {
     // Use OpenRouter to query Perplexity
     const response = await llmClient.processTemplate(
       {
+        id: "test-research",
+        type: TemplateType.LOCATION_ANALYSIS,
+        version: "1.0",
+        description: "Test prompt for research",
         systemPrompt: `You are a local expert on ${TEST_LOCATION} with knowledge about ${TEST_INTEREST} spots.`,
-        userPrompt: researchPrompt,
-        outputFormat: { type: "text" } as OutputFormat
+        userPromptTemplate: researchPrompt,
+        outputFormat: OutputFormat.MARKDOWN,
+        outputSchema: {},
+        tags: ['TEST'],
+        category: LogCategory.LLM,
+        parameters: []
       },
       {},
       { 
@@ -107,9 +115,17 @@ async function testGeminiIntegration(researchResults: string) {
     // Use Gemini to enhance and structure the data
     const response = await llmClient.processTemplate(
       {
+        id: "test-enhancement",
+        type: TemplateType.CONTENT_ENHANCEMENT,
+        version: "1.0",
+        description: "Test prompt for content enhancement",
         systemPrompt: `You are a helpful assistant that structures data into clean JSON format.`,
-        userPrompt: enhancementPrompt,
-        outputFormat: { type: "json" } as OutputFormat
+        userPromptTemplate: enhancementPrompt,
+        outputFormat: OutputFormat.JSON,
+        outputSchema: {},
+        tags: ['TEST'],
+        category: LogCategory.LLM,
+        parameters: []
       },
       {},
       { 
