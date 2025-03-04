@@ -1,13 +1,11 @@
 "use client";
 
-import React from "react";
 import { SessionProvider } from "next-auth/react";
 
 /**
- * A minimal wrapper around NextAuth's SessionProvider.
- * 
- * This is kept as minimal as possible - we use Zustand for app state,
- * but NextAuth still needs this provider for its internal workings.
+ * A wrapper around NextAuth's SessionProvider.
+ * This component is needed for the client-side authentication to work.
+ * It should be placed near the root of your app, such as in layout.tsx.
  */
 export default function NextAuthProvider({
   children,

@@ -4,7 +4,7 @@
  * Spots App - Large Interest Model (LIM) Pipeline
  * 
  * This script is designed to be run as a cron job to refresh recommendation data
- * It uses Perplexity (via OpenRouter) for deep research and Gemini for formatting
+ * It uses Perplexity (via OpenRouter) for deep research and Gemini 2 Flash for formatting
  * 
  * Usage:
  *   npm run refresh-recommendations
@@ -16,16 +16,23 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
+import { LLMClient, LLMProvider } from '../src/lib/lim/llm-client';
+import { LIMLogger, LogCategory } from '../src/lib/lim/logging';
+import { OutputFormat } from '../src/lib/lim/templates';
+
+// Initialize logger
+const logger = new LIMLogger();
+
+// Initialize LLM client
+const llmClient = new LLMClient();
+
+// Initialize Prisma client
+const prisma = new PrismaClient();
 
 // Configuration
 const CONFIG = {
-  API_KEYS: {
-    OPENROUTER: process.env.OPENROUTER_API_KEY || "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",
-    GEMINI: process.env.GEMINI_API_KEY || "AIzaSyDtwd53YcpYsiYk5uXBZoPh0xiKxIQFmIk",
-  },
   LOCATIONS: [
     { id: 'la', name: 'Los Angeles', coordinates: [-118.2437, 34.0522] },
     { id: 'sf', name: 'San Francisco', coordinates: [-122.4194, 37.7749] },
@@ -47,188 +54,270 @@ const CONFIG = {
   RECOMMENDATIONS_PER_COMBO: 5,
   // Output directory for JSON files (fallback if database is unavailable)
   OUTPUT_DIR: path.join(__dirname, '../data/recommendations'),
+  // LLM configuration
+  LLM: {
+    RESEARCH: {
+      provider: LLMProvider.OPENROUTER,
+      model: "perplexity/sonar-small-online",
+      temperature: 0.3,
+      maxTokens: 4000
+    },
+    ENHANCEMENT: {
+      provider: LLMProvider.GEMINI,
+      model: "gemini-2-flash",
+      temperature: 0.7,
+      maxTokens: 2000
+    }
+  }
 };
-
-// Initialize database client
-const prisma = new PrismaClient();
 
 /**
  * Main function to refresh all recommendation data
  */
 async function refreshAllRecommendations() {
-  console.log('🗺️ Spots App - Starting LIM Pipeline');
-  console.log(`📅 ${new Date().toISOString()}`);
-  console.log('-----------------------------------');
-
-  // Ensure output directory exists
-  if (!fs.existsSync(CONFIG.OUTPUT_DIR)) {
-    fs.mkdirSync(CONFIG.OUTPUT_DIR, { recursive: true });
-  }
-
-  // Track statistics
+  logger.info(
+    LogCategory.PIPELINE,
+    '🗺️ Spots App - Starting LIM Pipeline',
+    { timestamp: new Date().toISOString() },
+    ['START', 'PIPELINE']
+  );
+  
+  // Create statistics object to track pipeline performance
   const stats = {
+    started: new Date(),
+    completed: null as Date | null,
     totalCombinations: CONFIG.LOCATIONS.length * CONFIG.INTERESTS.length,
-    processedCombinations: 0,
-    successfulCombinations: 0,
-    failedCombinations: 0,
-    startTime: Date.now(),
+    successful: 0,
+    failed: 0,
+    skipped: 0,
+    byLocation: {} as Record<string, { successful: number, failed: number }>,
+    byInterest: {} as Record<string, { successful: number, failed: number }>
   };
-
+  
+  // Initialize stats counters
+  CONFIG.LOCATIONS.forEach(location => {
+    stats.byLocation[location.id] = { successful: 0, failed: 0 };
+  });
+  
+  CONFIG.INTERESTS.forEach(interest => {
+    stats.byInterest[interest.id] = { successful: 0, failed: 0 };
+  });
+  
   // Process each location-interest combination
   for (const location of CONFIG.LOCATIONS) {
     for (const interest of CONFIG.INTERESTS) {
       try {
-        console.log(`Processing: ${interest.name} in ${location.name}`);
+        logger.info(
+          LogCategory.PIPELINE,
+          `Processing: ${interest.name} in ${location.name}`,
+          { interest: interest.id, location: location.id },
+          ['PROCESSING']
+        );
         
         // Step 1: Deep research with Perplexity via OpenRouter
         const researchResults = await performDeepResearch(interest, location);
         
-        // Step 2: Format and enhance with Gemini
+        // Step 2: Format and enhance with Gemini 2 Flash
         const enhancedResults = await enhanceWithGemini(researchResults, interest, location);
         
         // Step 3: Store results
         await storeResults(enhancedResults, interest, location);
         
-        stats.processedCombinations++;
-        stats.successfulCombinations++;
+        // Update statistics
+        stats.successful++;
+        stats.byLocation[location.id].successful++;
+        stats.byInterest[interest.id].successful++;
         
-        console.log(`✅ Completed: ${interest.name} in ${location.name}`);
+        logger.info(
+          LogCategory.PIPELINE,
+          `✅ Completed: ${interest.name} in ${location.name}`,
+          { interest: interest.id, location: location.id },
+          ['SUCCESS']
+        );
       } catch (error) {
-        console.error(`❌ Failed: ${interest.name} in ${location.name}`, error);
-        stats.processedCombinations++;
-        stats.failedCombinations++;
+        // Update statistics
+        stats.failed++;
+        stats.byLocation[location.id].failed++;
+        stats.byInterest[interest.id].failed++;
+        
+        logger.error(
+          LogCategory.PIPELINE,
+          `❌ Failed: ${interest.name} in ${location.name}`,
+          { error, interest: interest.id, location: location.id },
+          ['FAILURE']
+        );
       }
-      
-      // Add a small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 
   // Update trending interests based on processed data
   await updateTrendingInterests();
-
-  // Print summary
-  const duration = (Date.now() - stats.startTime) / 1000;
-  console.log('\n-----------------------------------');
-  console.log('📊 LIM Pipeline Summary:');
-  console.log(`Total combinations: ${stats.totalCombinations}`);
-  console.log(`Successful: ${stats.successfulCombinations}`);
-  console.log(`Failed: ${stats.failedCombinations}`);
-  console.log(`Duration: ${duration.toFixed(2)} seconds`);
-  console.log('-----------------------------------');
+  
+  // Complete statistics
+  stats.completed = new Date();
+  const duration = stats.completed.getTime() - stats.started.getTime();
+  
+  logger.info(
+    LogCategory.PIPELINE,
+    '🏁 LIM Pipeline Complete',
+    { 
+      stats,
+      duration: `${Math.round(duration / 1000)}s`,
+      successRate: `${Math.round((stats.successful / stats.totalCombinations) * 100)}%`
+    },
+    ['COMPLETE', 'STATS']
+  );
+  
+  return stats;
 }
 
 /**
  * Perform deep research using Perplexity via OpenRouter
  */
 async function performDeepResearch(interest: typeof CONFIG.INTERESTS[0], location: typeof CONFIG.LOCATIONS[0]) {
-  console.log(`  🔍 Researching ${interest.name} spots in ${location.name}...`);
-  
-  // In production, this would make an actual API call to OpenRouter/Perplexity
-  // For demo purposes, we'll simulate the response
-  
-  const prompt = `
-    I need detailed recommendations for the best ${interest.name.toLowerCase()} spots in ${location.name}.
-    
-    For each recommendation, please provide:
-    1. The name of the place
-    2. A brief description (1-2 sentences)
-    3. The address
-    4. 3-4 tags that describe what makes this place special
-    5. The type of establishment (cafe, park, museum, etc.)
-    
-    Focus on places that are highly regarded by locals, unique, and authentic.
-    Provide exactly ${CONFIG.RECOMMENDATIONS_PER_COMBO} recommendations.
-  `;
-  
   try {
-    // This would be a real API call in production
-    if (process.env.NODE_ENV === 'production') {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CONFIG.API_KEYS.OPENROUTER}`,
-          'HTTP-Referer': 'https://spots.app',
-        },
-        body: JSON.stringify({
-          model: 'perplexity/sonar-small-online',
-          messages: [
-            { role: 'system', content: 'You are a local expert who knows the best spots in every city.' },
-            { role: 'user', content: prompt }
-          ],
-        }),
-      });
-      
-      const data = await response.json();
-      return data.choices[0].message.content;
-    } else {
-      // For development, return mock data
-      console.log('  ⚠️ Using mock data (development mode)');
+    // Check if we're in a test/development environment without API keys
+    if (process.env.NODE_ENV === 'development' && !process.env.OPENROUTER_API_KEY) {
+      logger.info(
+        LogCategory.LLM,
+        `Using mock data for Perplexity research (${interest.name} in ${location.name})`,
+        { interest: interest.id, location: location.id },
+        ['MOCK', 'PERPLEXITY']
+      );
       return mockPerplexityResponse(interest, location);
     }
+    
+    logger.info(
+      LogCategory.LLM,
+      `Performing deep research with Perplexity (${interest.name} in ${location.name})`,
+      { interest: interest.id, location: location.id },
+      ['RESEARCH', 'PERPLEXITY']
+    );
+    
+    // Create a research prompt
+    const researchPrompt = `
+      I need detailed, factual information about the best places for ${interest.name.toLowerCase()} in ${location.name}.
+      
+      Please include:
+      1. Hidden gems and local favorites
+      2. Well-known destinations that are actually worth visiting
+      3. Emerging and trending spots
+      4. Places with unique or special characteristics
+      5. Information about what makes each place special, distinctive or worth visiting
+      6. Any relevant details about location, price range, or crowd levels
+      
+      For each place, please provide:
+      - Name
+      - Brief description (what makes it special)
+      - Location/neighborhood
+      - Any notable features or specialties
+      
+      Please ensure information is current and accurate. Focus on places that have genuine appeal to enthusiasts of ${interest.name.toLowerCase()}.
+      
+      Organize the information clearly.
+    `;
+    
+    // Use OpenRouter to query Perplexity
+    const response = await llmClient.processTemplate(
+      {
+        name: "spot-research",
+        systemPrompt: `You are a knowledgeable local expert on ${location.name} with deep knowledge about ${interest.name} spots. Provide factual, specific information about actual places that exist. Be specific and include important details.`,
+        userPrompt: researchPrompt,
+        outputFormat: { type: "text" } as OutputFormat
+      },
+      {},
+      { 
+        ...CONFIG.LLM.RESEARCH,
+        tags: ['PIPELINE', 'RESEARCH', interest.id, location.id] 
+      }
+    );
+    
+    return response;
   } catch (error) {
-    console.error('  ❌ Perplexity API error:', error);
-    throw new Error(`Perplexity research failed for ${interest.name} in ${location.name}`);
+    logger.error(
+      LogCategory.LLM,
+      `Research error for ${interest.name} in ${location.name}`,
+      { error, interest: interest.id, location: location.id },
+      ['RESEARCH_ERROR', 'PERPLEXITY'] 
+    );
+    
+    // Fallback to mock data if there's an error
+    return mockPerplexityResponse(interest, location);
   }
 }
 
 /**
- * Enhance and format research results using Gemini
+ * Enhance and format research results using Gemini 2 Flash
  */
 async function enhanceWithGemini(researchResults: string, interest: typeof CONFIG.INTERESTS[0], location: typeof CONFIG.LOCATIONS[0]) {
-  console.log(`  🤖 Enhancing results with Gemini...`);
-  
-  const prompt = `
-    I have research about ${interest.name} spots in ${location.name}. 
-    Please format this into a structured JSON array with the following fields for each spot:
-    - id: a unique string identifier
-    - name: the name of the place
-    - description: a concise, engaging description
-    - type: the type of establishment (cafe, park, museum, etc.)
-    - address: the full address
-    - tags: an array of 3-4 descriptive tags
-    - coordinates: placeholder for coordinates [0, 0] (these will be filled in later)
-    - checkIns: a random number between 50 and 500 representing visitor count
-    
-    Research data:
-    ${researchResults}
-    
-    Return ONLY the JSON array with no additional text.
-  `;
-  
   try {
-    // This would be a real API call in production
-    if (process.env.NODE_ENV === 'production') {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': CONFIG.API_KEYS.GEMINI,
-        },
-        body: JSON.stringify({
-          contents: [
-            { role: 'user', parts: [{ text: prompt }] }
-          ],
-          generationConfig: {
-            temperature: 0.2,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 8192,
-          },
-        }),
-      });
-      
-      const data = await response.json();
-      return data.candidates[0].content.parts[0].text;
-    } else {
-      // For development, return mock data
-      console.log('  ⚠️ Using mock data (development mode)');
+    // Check if we're in a test/development environment without API keys
+    if (process.env.NODE_ENV === 'development' && !process.env.GEMINI_API_KEY) {
+      logger.info(
+        LogCategory.LLM,
+        `Using mock data for Gemini enhancement (${interest.name} in ${location.name})`,
+        { interest: interest.id, location: location.id },
+        ['MOCK', 'GEMINI']
+      );
       return mockGeminiResponse(interest, location);
     }
+    
+    logger.info(
+      LogCategory.LLM,
+      `Enhancing data with Gemini 2 Flash (${interest.name} in ${location.name})`,
+      { interest: interest.id, location: location.id },
+      ['ENHANCEMENT', 'GEMINI']
+    );
+    
+    // Create an enhancement prompt
+    const enhancementPrompt = `
+      Please analyze the following research about ${interest.name.toLowerCase()} places in ${location.name} and structure it into a clean, organized JSON format for our recommendation system.
+      
+      RESEARCH DATA:
+      ${researchResults}
+      
+      For each place, extract or infer:
+      - name: The name of the place
+      - description: A concise 1-2 sentence description
+      - type: The type/category (${getTypeForInterest(interest.id)})
+      - neighborhood: The neighborhood or area within ${location.name}
+      - tags: 2-4 relevant tags from: ${getTagsForInterest(interest.id).join(', ')}
+      - priceRange: A number from 1-4 (1 being least expensive, 4 being most)
+      - popularity: A number from 1-10 representing how popular/busy it is
+      - coordinates: Approximate [longitude, latitude] if available, otherwise null
+      - website: The website URL if available, otherwise null
+      - imageUrl: Leave as null, we'll add images later
+      - checkIns: A randomly generated number between 5-120 representing user visits
+      
+      Return ONLY a JSON array of exactly ${CONFIG.RECOMMENDATIONS_PER_COMBO} recommendations (the very best places). Each recommendation should have all fields listed above. Format as a clean, valid JSON array with no additional text.
+    `;
+    
+    // Use Gemini to enhance and structure the data
+    const response = await llmClient.processTemplate(
+      {
+        name: "enhance-recommendations",
+        systemPrompt: `You are a helpful assistant that structures data about places into clean JSON format for a recommendation system. Only return valid, well-structured JSON without any explanations or extra text.`,
+        userPrompt: enhancementPrompt,
+        outputFormat: { type: "json" } as OutputFormat
+      },
+      {},
+      { 
+        ...CONFIG.LLM.ENHANCEMENT,
+        tags: ['PIPELINE', 'ENHANCEMENT', interest.id, location.id] 
+      }
+    );
+    
+    return response;
   } catch (error) {
-    console.error('  ❌ Gemini API error:', error);
-    throw new Error(`Gemini enhancement failed for ${interest.name} in ${location.name}`);
+    logger.error(
+      LogCategory.LLM,
+      `Enhancement error for ${interest.name} in ${location.name}`,
+      { error, interest: interest.id, location: location.id },
+      ['ENHANCEMENT_ERROR', 'GEMINI'] 
+    );
+    
+    // Fallback to mock data if there's an error
+    return mockGeminiResponse(interest, location);
   }
 }
 

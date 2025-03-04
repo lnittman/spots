@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import NextAuthProvider from "@/components/auth/NextAuthProvider";
+import { AuthSync } from "@/components/auth/AuthSync";
 
 import "@/styles/globals.css";
 
@@ -66,15 +68,20 @@ export default function RootLayout({
           "min-h-screen bg-background antialiased",
         )}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          {children}
-          <Toaster />
-        </ThemeProvider>
+        <NextAuthProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {/* Sync NextAuth session with our store */}
+            <AuthSync />
+            
+            {children}
+            <Toaster />
+          </ThemeProvider>
+        </NextAuthProvider>
       </body>
     </html>
   );

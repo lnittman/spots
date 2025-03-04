@@ -1,75 +1,64 @@
-import { OpenAIStream, StreamingTextResponse } from "ai";
+import { streamText } from "ai";
 import { OpenAI } from "openai";
 import { z } from "zod";
 
 // Create OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || 'sk-placeholder-token-for-build-process',
 });
 
 export async function streamOpenAI({
   prompt,
-  systemPrompt = "You are a helpful assistant.",
+  context = "",
+  system = "",
   temperature = 0.7,
-  model = "gpt-4o",
+  max_tokens = 1000,
 }: {
   prompt: string;
-  systemPrompt?: string;
+  context?: string;
+  system?: string;
   temperature?: number;
-  model?: string;
+  max_tokens?: number;
 }) {
   const response = await openai.chat.completions.create({
-    model,
-    temperature,
+    model: "gpt-4-turbo-preview",
     stream: true,
+    temperature,
+    max_tokens,
     messages: [
       {
-        role: "system",
-        content: systemPrompt,
+        role: "system" as const,
+        content: system || "You are a helpful assistant for the Spots application. Provide detailed, accurate information to help users find interesting places based on their interests."
       },
-      {
-        role: "user",
-        content: prompt,
-      },
+      ...(context ? [{ role: "user" as const, content: context }] : []),
+      { role: "user" as const, content: prompt }
     ],
   });
 
-  // Create a stream from the OpenAI response
-  const stream = OpenAIStream(response);
-
-  // Return a StreamingTextResponse, which is compatible with anything that expects a ReadableStream
-  return new StreamingTextResponse(stream);
+  // Create a stream from the response
+  return streamText(response);
 }
 
-// Schema for structuring AI responses
-export const recommendationSchema = z.object({
-  title: z.string(),
-  description: z.string(),
-  items: z.array(
-    z.object({
-      name: z.string(),
-      description: z.string(),
-      type: z.string(),
-      rating: z.number().min(0).max(5).optional(),
-      address: z.string().optional(),
-      websiteUrl: z.string().url().optional(),
-      imageUrl: z.string().url().optional(),
-      priceLevel: z.number().min(1).max(4).optional(),
-      openHours: z.string().optional(),
-      coordinates: z
-        .object({
-          latitude: z.number(),
-          longitude: z.number(),
-        })
-        .optional(),
-      tags: z.array(z.string()).optional(),
-      matchReason: z.string().optional(),
-    })
-  ),
-  follow_up_questions: z.array(z.string()).optional(),
+// Schema for expand interests request
+export const expandInterestsSchema = z.object({
+  interests: z.array(z.string()),
+  location: z.string().optional(),
+  count: z.number().optional().default(5),
 });
 
-export type Recommendation = z.infer<typeof recommendationSchema>;
+// Schema for recommendation request
+export const recommendationSchema = z.object({
+  interest: z.string(),
+  location: z.string(),
+  context: z.string().optional(),
+  count: z.number().optional().default(5),
+});
+
+// Schema for query request
+export const querySchema = z.object({
+  query: z.string(),
+  context: z.string().optional(),
+});
 
 // Interest expansion helper
 export async function expandInterests(interests: string[]) {
