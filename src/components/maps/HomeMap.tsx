@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { LocationDropdown, type LocationItem } from '@/components/LocationDropdown';
 
 // Large Interest Model (LIM) Pipeline Configuration
 // This system handles interest processing, spot discovery, and personalized recommendations
@@ -21,36 +22,86 @@ const LIM_CONFIG = {
 };
 
 // Sample data would be refreshed by the LIM pipeline via cron job
-const sampleLocations = [
+const sampleLocations: LocationItem[] = [
   { 
     id: '5', 
     coordinates: [-118.2437, 34.0522] as [number, number], 
     title: 'Los Angeles', 
-    type: 'city' 
+    type: 'city',
+    emoji: '🌴',
+    trending: true
   },
   { 
     id: '1', 
     coordinates: [-122.4194, 37.7749] as [number, number], 
     title: 'San Francisco', 
-    type: 'city' 
+    type: 'city',
+    emoji: '🌉',
+    trending: true
   },
   { 
     id: '2', 
     coordinates: [-122.3321, 37.8800] as [number, number], 
     title: 'Berkeley', 
-    type: 'city' 
+    type: 'city',
+    emoji: '🎓',
+    trending: false
   },
   { 
     id: '3', 
     coordinates: [-122.2364, 37.5485] as [number, number], 
     title: 'Palo Alto', 
-    type: 'city' 
+    type: 'city',
+    emoji: '💻',
+    trending: false
   },
   { 
     id: '4', 
     coordinates: [-74.0060, 40.7128] as [number, number], 
     title: 'New York', 
-    type: 'city' 
+    type: 'city',
+    emoji: '🗽',
+    trending: true
+  },
+  {
+    id: '6',
+    coordinates: [-80.1918, 25.7617] as [number, number],
+    title: 'Miami',
+    type: 'city',
+    emoji: '🏖️',
+    trending: true
+  },
+  {
+    id: '7',
+    coordinates: [-87.6298, 41.8781] as [number, number],
+    title: 'Chicago',
+    type: 'city',
+    emoji: '🌆',
+    trending: true
+  },
+  {
+    id: '8',
+    coordinates: [-97.7431, 30.2672] as [number, number],
+    title: 'Austin',
+    type: 'city',
+    emoji: '🎸',
+    trending: true
+  },
+  {
+    id: '9',
+    coordinates: [-122.3321, 47.6062] as [number, number],
+    title: 'Seattle',
+    type: 'city',
+    emoji: '☕',
+    trending: false
+  },
+  {
+    id: '10',
+    coordinates: [-104.9903, 39.7392] as [number, number],
+    title: 'Denver',
+    type: 'city',
+    emoji: '⛰️',
+    trending: false
   }
 ];
 
@@ -259,14 +310,16 @@ export class LargeInterestModel {
 }
 
 export function HomeMap() {
+  // Force log of locations to check what's available
+  useEffect(() => {
+    console.log("Available locations:", sampleLocations);
+  }, []);
+
   const [selectedLocation, setSelectedLocation] = useState(sampleLocations[0]); // Los Angeles is first
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
-  const [locationSearch, setLocationSearch] = useState('Los Angeles');
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredInterest, setHoveredInterest] = useState<string | null>(null);
-  const locationDropdownRef = useRef<HTMLDivElement>(null);
   const interestsContainerRef = useRef<HTMLDivElement>(null);
 
   // Function to toggle interest selection
@@ -284,27 +337,6 @@ export function HomeMap() {
       setIsLoading(false);
     }, 400);
   };
-
-  // Filter locations based on search input
-  const filteredLocations = locationSearch.trim() === '' 
-    ? sampleLocations 
-    : sampleLocations.filter(loc => 
-        loc.title.toLowerCase().includes(locationSearch.toLowerCase())
-      );
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
-        setShowLocationDropdown(false);
-      }
-    }
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   // Update recommendations based on selected location and interests
   useEffect(() => {
@@ -415,46 +447,12 @@ export function HomeMap() {
 
       {/* Map with Location Dropdown */}
       <div className="relative">
-        <div 
+        <LocationDropdown
+          locations={sampleLocations}
+          selectedLocation={selectedLocation}
+          onChange={setSelectedLocation}
           className="absolute top-3 left-3 z-10 w-64"
-          ref={locationDropdownRef}
-        >
-          <div className="relative">
-            <Input
-              type="text"
-              placeholder="Search for a city..."
-              className="bg-white/90 backdrop-blur-sm shadow-md text-[#050A14] border-0"
-              value={locationSearch}
-              onChange={(e) => {
-                setLocationSearch(e.target.value);
-                setShowLocationDropdown(true);
-              }}
-              onFocus={() => setShowLocationDropdown(true)}
-            />
-            
-            {showLocationDropdown && (
-              <div className="absolute top-full left-0 w-full mt-1 bg-white shadow-lg rounded-md overflow-hidden z-20">
-                {filteredLocations.length > 0 ? (
-                  filteredLocations.map((location) => (
-                    <div 
-                      key={location.id} 
-                      className={`px-3 py-2 cursor-pointer text-[#050A14] hover:bg-[#4ECDC4]/10 ${location.id === selectedLocation.id ? 'bg-[#4ECDC4]/20 font-medium' : ''}`}
-                      onClick={() => {
-                        setSelectedLocation(location);
-                        setLocationSearch(location.title);
-                        setShowLocationDropdown(false);
-                      }}
-                    >
-                      {location.title}
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-3 py-2 text-[#050A14]/60">No locations found</div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        />
         
         <MapView 
           center={selectedLocation.coordinates}
@@ -465,7 +463,6 @@ export function HomeMap() {
             const location = sampleLocations.find(loc => loc.id === id);
             if (location) {
               setSelectedLocation(location);
-              setLocationSearch(location.title);
             }
           }}
         />
