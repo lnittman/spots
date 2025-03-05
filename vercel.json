@@ -18,14 +18,14 @@
       }
     }
   ],
-  "crons": {
-    "refresh-trending-cities": {
+  "crons": [
+    {
       "path": "/api/cron/refresh-trending",
       "schedule": "0 0 * * *"
     },
-    "refresh-interests-data": {
+    {
       "path": "/api/cron/refresh-interests",
       "schedule": "0 2 * * 0"
     }
-  }
+  ]
 } 
