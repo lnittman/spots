@@ -4,8 +4,31 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { HomeMap } from "@/components/maps/HomeMap";
 import { DynamicFeatures } from "@/components/features/DynamicFeatures";
+import { useState } from "react";
+import { defaultCities } from "@/lib/cities-data";
+import { LocationDropdown } from "@/components/LocationDropdown";
+import type { LocationItem } from "@/components/LocationDropdown";
+
+// Convert city data to location items for dropdown
+const cityLocations: LocationItem[] = defaultCities.map(city => ({
+  id: city.id,
+  title: city.name,
+  coordinates: city.coordinates,
+  emoji: city.emoji,
+  trending: city.trending,
+  type: city.type
+}));
 
 export default function HomePage() {
+  // Shared location state
+  const [selectedLocation, setSelectedLocation] = useState<LocationItem>(cityLocations[0]);
+  
+  // Handle location change - will be passed to both location dropdowns
+  const handleLocationChange = (location: LocationItem) => {
+    setSelectedLocation(location);
+    console.log("Location changed to:", location.title);
+  };
+  
   // Add debug log for vercel deployment
   console.log("Home page rendering");
   
@@ -45,7 +68,10 @@ export default function HomePage() {
           <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
             {/* Interactive Map */}
             <div className="max-w-[90rem] mx-auto mb-8 sm:mb-12">
-              <HomeMap />
+              <HomeMap 
+                selectedLocation={selectedLocation} 
+                onChange={handleLocationChange} 
+              />
             </div>
             
             {/* Hero Text */}
@@ -100,7 +126,10 @@ export default function HomePage() {
             </div>
             
             {/* Dynamic features component */}
-            <DynamicFeatures />
+            <DynamicFeatures 
+              selectedLocation={selectedLocation}
+              onChange={handleLocationChange}
+            />
           </div>
         </section>
         

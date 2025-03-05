@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
 import { LIMLogger, LogCategory } from '@/lib/lim/logging';
 import { defaultCities, getCityData } from '@/lib/cities-data';
+import { LocationDropdown, type LocationItem } from '@/components/LocationDropdown';
 
 // Get city data from the cities-data module
 const cityLocations = defaultCities.map(city => ({
@@ -14,7 +15,7 @@ const cityLocations = defaultCities.map(city => ({
   title: city.name,
   coordinates: city.coordinates,
   emoji: city.emoji,
-  trending: city.trending,
+  trending: city.trending || false,
   type: city.type
 }));
 
@@ -65,9 +66,31 @@ const demoInterests = [
   { id: 'nature', name: 'Nature', emoji: '🌳', color: '#AAC789' }
 ];
 
-export function DynamicFeatures() {
-  // Use fixed location - selection moved to HomeMap
-  const selectedLocation = cityLocations[0]; // Los Angeles
+// Interface for DynamicFeatures props
+interface DynamicFeaturesProps {
+  selectedLocation?: LocationItem;
+  onChange?: (location: LocationItem) => void;
+}
+
+export function DynamicFeatures({ selectedLocation, onChange }: DynamicFeaturesProps) {
+  // Use props if provided, otherwise use local state
+  const [localSelectedLocation, setLocalSelectedLocation] = useState(cityLocations[0]);
+  const effectiveLocation = selectedLocation || localSelectedLocation;
+  
+  // Function to handle location change
+  const handleLocationChange = (location: LocationItem) => {
+    if (onChange) {
+      onChange(location);
+    } else {
+      setLocalSelectedLocation(location);
+    }
+    logger.info(
+      LogCategory.USER,
+      'Location changed in feature demos',
+      { cityId: location.id, cityName: location.title },
+      ['HOME', 'FEATURES', 'CITY_CHANGE']
+    );
+  };
   
   const [personalized, setPersonalized] = useState<FeatureDemo>({
     title: "Personalized Recommendations",
@@ -96,10 +119,10 @@ export function DynamicFeatures() {
     logger.info(
       LogCategory.USER,
       'Loading features for city',
-      { cityId: selectedLocation.id, cityName: selectedLocation.title },
+      { cityId: effectiveLocation.id, cityName: effectiveLocation.title },
       ['HOME', 'FEATURES', 'INIT']
     );
-  }, []); // No dependencies since selectedLocation is now constant
+  }, [effectiveLocation]); // Update when location changes
 
   // Load personalized recommendations for the selected location
   const loadPersonalizedRecommendations = async () => {
@@ -109,7 +132,7 @@ export function DynamicFeatures() {
       // In a real implementation, this would call the API to get personalized recommendations
       // For now, we'll simulate a delay and return mock data
       setTimeout(() => {
-        const recommendations = generatePersonalizedRecommendations(selectedLocation.title);
+        const recommendations = generatePersonalizedRecommendations(effectiveLocation.title);
         
         setPersonalized({
           title: "Personalized Recommendations",
@@ -131,11 +154,11 @@ export function DynamicFeatures() {
       // In a real implementation, this would call the API to get search results
       // For now, we'll simulate a delay and return mock data
       setTimeout(() => {
-        const results = generateSearchResults(selectedLocation.title);
+        const results = generateSearchResults(effectiveLocation.title);
         
         setSearch({
           title: "Natural Language Search",
-          content: renderSearchContent(results, selectedLocation.title),
+          content: renderSearchContent(results, effectiveLocation.title),
           loading: false
         });
       }, 1000);
@@ -153,7 +176,7 @@ export function DynamicFeatures() {
       // In a real implementation, this would call the API to get contextual suggestions
       // For now, we'll simulate a delay and return mock data
       setTimeout(() => {
-        const suggestions = generateContextualSuggestions(selectedLocation.title);
+        const suggestions = generateContextualSuggestions(effectiveLocation.title);
         
         setContextual({
           title: "Contextual Awareness",
@@ -227,7 +250,7 @@ export function DynamicFeatures() {
       <div className="flex justify-between items-center mb-3 p-2 bg-white/5 rounded-lg">
         <div className="text-xs text-white/60">Saturday, 6:30 PM</div>
         <div className="text-xs text-white/60 flex items-center gap-1">
-          <span>🌤️</span> {getWeatherForLocation(selectedLocation.title)}
+          <span>🌤️</span> {getWeatherForLocation(effectiveLocation.title)}
         </div>
       </div>
       <div className="space-y-2">
@@ -365,6 +388,19 @@ export function DynamicFeatures() {
 
   return (
     <div className="w-full">
+      {/* City Location Selector - centered above feature cards */}
+      <div className="flex flex-col sm:flex-row justify-center items-center mb-6 relative z-10">
+        <div className="mb-2 sm:mb-0 sm:mr-3 text-white/60 text-sm">
+          Select a city:
+        </div>
+        <LocationDropdown
+          locations={cityLocations}
+          selectedLocation={effectiveLocation}
+          onChange={handleLocationChange}
+          className="w-64"
+        />
+      </div>
+      
       {/* Feature Cards Grid - Centered with flex */}
       <div className="flex flex-col lg:flex-row justify-center items-stretch gap-8 sm:gap-10 py-6 sm:py-8 w-full">
         {/* Personalized Recommendations */}

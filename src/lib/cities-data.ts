@@ -66,6 +66,14 @@ export const defaultCities: CityData[] = [
     type: 'city'
   },
   { 
+    id: 'detroit', 
+    name: 'Detroit', 
+    coordinates: [-83.0458, 42.3314],
+    emoji: '🚗',
+    trending: false,
+    type: 'city'
+  },
+  { 
     id: 'seattle', 
     name: 'Seattle', 
     coordinates: [-122.3321, 47.6062],
@@ -165,6 +173,7 @@ const cityEmojiMap: Record<string, string> = {
   'Rome': '🏛️',
   'Miami': '🏖️',
   'Austin': '🎸',
+  'Detroit': '🚗',
   'Portland': '🌧️',
   'Nashville': '🎵',
   'Boston': '🏛️',
@@ -199,7 +208,8 @@ const cityCoordinatesMap: Record<string, [number, number]> = {
   'Amsterdam': [4.9041, 52.3676],
   'Rome': [12.4964, 41.9028],
   'Miami': [-80.1918, 25.7617],
-  'Austin': [-97.7431, 30.2672]
+  'Austin': [-97.7431, 30.2672],
+  'Detroit': [-83.0458, 42.3314]
 };
 
 /**

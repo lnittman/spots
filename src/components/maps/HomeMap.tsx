@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { MapView } from './MapView';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapView } from '@/components/map/map-view';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -236,13 +236,28 @@ export class LargeInterestModel {
   }
 }
 
-export function HomeMap() {
-  // Force log of locations to check what's available
-  useEffect(() => {
-    console.log("Available locations:", sampleLocations);
-  }, []);
+// Interface for HomeMap props
+interface HomeMapProps {
+  selectedLocation?: LocationItem;
+  onChange?: (location: LocationItem) => void;
+}
 
-  const [selectedLocation, setSelectedLocation] = useState(sampleLocations[0]); // Los Angeles is first
+export function HomeMap({ selectedLocation, onChange }: HomeMapProps) {
+  // Use props if provided, otherwise use local state
+  const [localSelectedLocation, setLocalSelectedLocation] = useState(sampleLocations[0]);
+  const effectiveLocation = selectedLocation || localSelectedLocation;
+  
+  // Function to handle location change
+  const handleLocationChange = (location: LocationItem) => {
+    if (onChange) {
+      onChange(location);
+    } else {
+      setLocalSelectedLocation(location);
+    }
+    console.log("Location changed to:", location.title);
+  };
+  
+  // Rest of the code...
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -267,14 +282,14 @@ export function HomeMap() {
 
   // Update recommendations based on selected location and interests
   useEffect(() => {
-    if (selectedLocation && selectedInterests.length > 0) {
+    if (effectiveLocation && selectedInterests.length > 0) {
       setIsLoading(true);
       
       // Simulate API call to the LIM pipeline
       setTimeout(async () => {
         const spots = await LargeInterestModel.discoverSpots(
           selectedInterests, 
-          selectedLocation.title
+          effectiveLocation.title
         );
         setRecommendations(spots);
         setIsLoading(false);
@@ -282,7 +297,7 @@ export function HomeMap() {
     } else {
       setRecommendations([]);
     }
-  }, [selectedLocation, selectedInterests]);
+  }, [effectiveLocation, selectedInterests]);
 
   // Get interest button color based on selection and hover
   const getInterestButtonStyle = (interest: typeof sampleInterests[0], isSelected: boolean, isHovered: boolean) => {
@@ -326,14 +341,6 @@ export function HomeMap() {
     ) || "Coffee";
     
     return tagColors[colorKey] || "bg-white/5 text-white/70 border-white/10";
-  };
-
-  // Function to handle location change
-  const handleLocationChange = (location: LocationItem) => {
-    setSelectedLocation(location);
-    
-    // Log the change for analytics
-    console.log("Location changed to:", location.title);
   };
 
   return (
@@ -384,20 +391,26 @@ export function HomeMap() {
       <div className="relative">
         <LocationDropdown
           locations={sampleLocations}
-          selectedLocation={selectedLocation}
+          selectedLocation={effectiveLocation}
           onChange={handleLocationChange}
           className="absolute top-12 left-3 z-10 w-64 shadow-lg"
         />
         
         <MapView 
-          center={selectedLocation.coordinates}
+          center={effectiveLocation.coordinates}
           zoom={11}
-          markers={sampleLocations}
+          markers={sampleLocations.map(loc => ({
+            id: loc.id, 
+            name: loc.title, 
+            coordinates: loc.coordinates,
+            description: loc.type,
+            category: loc.type
+          }))}
           className="h-[350px] md:h-[400px] rounded-md border border-white/5 shadow-md w-full"
           onMarkerClick={(id) => {
             const location = sampleLocations.find(loc => loc.id === id);
             if (location) {
-              setSelectedLocation(location);
+              handleLocationChange(location);
             }
           }}
         />
@@ -407,7 +420,7 @@ export function HomeMap() {
       {!isLoading && recommendations.length > 0 && (
         <div className="mt-6">
           <div className="flex items-center gap-2 mb-4">
-            <h3 className="text-lg font-semibold">Recommended in {selectedLocation.title}</h3>
+            <h3 className="text-lg font-semibold">Recommended in {effectiveLocation.title}</h3>
             <Badge className="bg-[#4ECDC4]/20 text-[#4ECDC4]/90 hover:bg-[#4ECDC4]/30">
               {sampleInterests.find(i => i.id === selectedInterests[0])?.name}
             </Badge>
