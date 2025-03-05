@@ -386,7 +386,7 @@ export function HomeMap() {
           locations={sampleLocations}
           selectedLocation={selectedLocation}
           onChange={handleLocationChange}
-          className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 w-72 shadow-lg"
+          className="absolute top-3 left-3 z-10 w-64 shadow-lg"
         />
         
         <MapView 
