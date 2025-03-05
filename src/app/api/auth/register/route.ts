@@ -1,20 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { hash } from "bcrypt";
 import { z } from "zod";
 import { LIMLogger, LogCategory } from "@/lib/lim/logging";
+import prisma from "@/lib/db/prisma";
 
-const prisma = new PrismaClient();
 const logger = LIMLogger.getInstance();
 
 // Validation schema for registration
 const registerSchema = z.object({
-  name: z.string().min(2),
+  name: z.string().min(2).max(50),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(8).max(100),
 });
 
+/**
+ * User registration endpoint
+ * @param request Next API request
+ * @returns API response
+ */
 export async function POST(request: NextRequest) {
+  // Temporarily disable in production to avoid bcrypt native module issues
+  if (process.env.VERCEL_ENV === 'production') {
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: 'Registration is temporarily disabled in production. Please use the demo login or social login options.' 
+      },
+      { 
+        status: 503 
+      }
+    );
+  }
+
   try {
     const body = await request.json();
 
@@ -56,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password
-    const hashedPassword = await hash(password, 12);
+    const hashedPassword = await hash(password, 10);
 
     // Create user
     const user = await prisma.user.create({
@@ -75,15 +92,14 @@ export async function POST(request: NextRequest) {
       ['AUTH', 'REGISTER', 'SUCCESS']
     );
 
+    // Don't return the password
+    const { password: _, ...userWithoutPassword } = user;
+
     // Return success response
     return NextResponse.json(
       { 
         message: "User registered successfully",
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-        }
+        user: userWithoutPassword
       },
       { status: 201 }
     );

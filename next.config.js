@@ -16,20 +16,6 @@ const nextConfig = {
   // Experimental features
   experimental: {
     optimizeCss: true,
-    // Add cron jobs to experimental section
-    cronJobs: {
-      // Refresh trending cities daily at midnight UTC
-      'refresh-trending-cities': {
-        path: '/api/cron/refresh-trending',
-        schedule: '0 0 * * *' // Daily at midnight (cron syntax)
-      },
-      
-      // Refresh interest data weekly on Sunday at 2am UTC
-      'refresh-interests-data': {
-        path: '/api/cron/refresh-interests',
-        schedule: '0 2 * * 0' // Weekly on Sunday at 2am (cron syntax)
-      }
-    }
   },
   
   // Handle bcrypt properly - this tells Next.js to bundle bcrypt for the server
