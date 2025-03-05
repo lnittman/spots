@@ -1,17 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 /**
  * User registration endpoint - disabled in production due to bcrypt native module issues
  */
+export const dynamic = 'force-dynamic';
+export const preferredRegion = 'iad1';
+
 export async function POST(request: NextRequest) {
-  // In production, return a service temporarily unavailable response
-  return NextResponse.json(
-    { 
-      success: false, 
-      message: 'Registration is temporarily disabled. Please use the demo login or social login options.' 
-    },
-    { 
-      status: 503 
+  return new Response(
+    JSON.stringify({
+      success: false,
+      message: 'Registration is temporarily unavailable.',
+    }),
+    {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/json',
+      },
     }
   );
 } 

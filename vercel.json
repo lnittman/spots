@@ -1,8 +1,33 @@
 {
   "version": 2,
+  "framework": "nextjs",
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install",
-  "framework": "nextjs",
+  "functions": {
+    "src/app/api/**/*": {
+      "runtime": "@vercel/node@latest",
+      "memory": 1024
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ],
   "regions": ["iad1"],
   "env": {
     "NEXT_PUBLIC_VERCEL_ENV": "production"
