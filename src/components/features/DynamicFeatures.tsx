@@ -378,8 +378,8 @@ export function DynamicFeatures() {
         />
       </div>
       
-      {/* Feature Cards Grid */}
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 sm:gap-10 py-6 sm:py-8 lg:grid-cols-3">
+      {/* Feature Cards Grid - Centered with flex */}
+      <div className="flex flex-col lg:flex-row justify-center items-center gap-8 sm:gap-10 py-6 sm:py-8 mx-auto">
         {/* Personalized Recommendations */}
         <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full max-w-md hover:bg-white/5 transition-all duration-300">
           <div className="mb-3 sm:mb-4 text-[#4ECDC4]/80">
