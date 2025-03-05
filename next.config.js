@@ -16,10 +16,24 @@ const nextConfig = {
   // Experimental features
   experimental: {
     optimizeCss: true,
+    // Add cron jobs to experimental section
+    cronJobs: {
+      // Refresh trending cities daily at midnight UTC
+      'refresh-trending-cities': {
+        path: '/api/cron/refresh-trending',
+        schedule: '0 0 * * *' // Daily at midnight (cron syntax)
+      },
+      
+      // Refresh interest data weekly on Sunday at 2am UTC
+      'refresh-interests-data': {
+        path: '/api/cron/refresh-interests',
+        schedule: '0 2 * * 0' // Weekly on Sunday at 2am (cron syntax)
+      }
+    }
   },
   
   // Move serverComponentsExternalPackages to the root level
-  serverExternalPackages: [],
+  serverExternalPackages: ['bcrypt'],
   
   // Define path rewrites to ensure API routes work correctly
   async rewrites() {
@@ -43,23 +57,6 @@ const nextConfig = {
     NEXT_PUBLIC_VERCEL_ENV: process.env.NEXT_PUBLIC_VERCEL_ENV,
     NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
   },
-  
-  // Vercel Cron Jobs configuration
-  // This defines when the cron jobs should run
-  // Documentation: https://vercel.com/docs/cron-jobs
-  crons: {
-    // Refresh trending cities daily at midnight UTC
-    'refresh-trending-cities': {
-      path: '/api/cron/refresh-trending',
-      schedule: '0 0 * * *' // Daily at midnight (cron syntax)
-    },
-    
-    // Refresh interest data weekly on Sunday at 2am UTC
-    'refresh-interests-data': {
-      path: '/api/cron/refresh-interests',
-      schedule: '0 2 * * 0' // Weekly on Sunday at 2am (cron syntax)
-    }
-  }
 };
 
 module.exports = nextConfig; 

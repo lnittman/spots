@@ -2,16 +2,30 @@
   "version": 2,
   "buildCommand": "pnpm build",
   "devCommand": "pnpm dev",
-  "installCommand": "pnpm install --no-frozen-lockfile --shamefully-hoist",
+  "installCommand": "pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
   "env": {
     "NEXT_PUBLIC_VERCEL_ENV": "production"
   },
-  "crons": [
+  "regions": ["iad1"],
+  "builds": [
     {
-      "path": "/api/cron/refresh-recommendations",
-      "schedule": "0 0 * * *"
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "nodeVersion": "20.x"
+      }
     }
-  ]
+  ],
+  "crons": {
+    "refresh-trending-cities": {
+      "path": "/api/cron/refresh-trending",
+      "schedule": "0 0 * * *"
+    },
+    "refresh-interests-data": {
+      "path": "/api/cron/refresh-interests",
+      "schedule": "0 2 * * 0"
+    }
+  }
 } 
