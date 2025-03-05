@@ -12,40 +12,45 @@ datasource db {
 
 // User model for authentication and personalization
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  password      String?   // Added password field for credentials login
-  image         String?
-  location      String?
-  bio           String?
-  onboardingComplete Boolean @default(false) // Track whether user completed onboarding
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  name               String?
+  email              String    @unique
+  emailVerified      DateTime?
+  password           String? // Added password field for credentials login
+  image              String?
+  location           String?
+  bio                String?
+  onboardingComplete Boolean   @default(false) // Track whether user completed onboarding
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   // Relations
-  interests     UserInterest[]
-  checkIns      CheckIn[]
-  collections   Collection[]
-  favorites     Favorite[]
-  accounts      Account[]  // Added accounts relation for OAuth
+  interests   UserInterest[]
+  checkIns    CheckIn[]
+  collections Collection[]
+  favorites   Favorite[]
+  accounts    Account[] // Added accounts relation for OAuth
+
+  // Add the missing relations
+  trips              Trip[] // Regular trips relation
+  createdTrips       Trip[]             @relation("TripCreator") // Creator relation
+  tripCollaborations TripCollaborator[] // Collaborations
 }
 
 // Account model for OAuth providers
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -55,21 +60,21 @@ model Account {
 
 // Interest categories that users can select
 model Interest {
-  id          String    @id @default(cuid())
-  name        String    @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
-  trending    Boolean   @default(false)
-  trendScore  Float     @default(0)
-  isSeasonal  Boolean   @default(false)
+  trending    Boolean  @default(false)
+  trendScore  Float    @default(0)
+  isSeasonal  Boolean  @default(false)
   category    String?
   imageUrl    String?
   iconName    String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
-  users       UserInterest[]
-  spots       SpotInterest[]
+  users           UserInterest[]
+  spots           SpotInterest[]
   recommendations Recommendation[]
 }
 
@@ -82,8 +87,8 @@ model UserInterest {
   createdAt  DateTime @default(now())
 
   // Relations
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
 
   @@unique([userId, interestId])
   @@index([userId])
@@ -92,29 +97,32 @@ model UserInterest {
 
 // Location/Spot model
 model Spot {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  address     String?
-  city        String
-  state       String?
-  country     String
-  latitude    Float
-  longitude   Float
-  rating      Float?   @default(0)
-  checkIns    Int      @default(0)
-  imageUrl    String?
-  websiteUrl  String?
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  address      String?
+  city         String
+  state        String?
+  country      String
+  latitude     Float
+  longitude    Float
+  rating       Float?   @default(0)
+  checkIns     Int      @default(0)
+  imageUrl     String?
+  websiteUrl   String?
   openingHours Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  interests   SpotInterest[]
-  checkInRecords CheckIn[]
-  favorites   Favorite[]
-  tags        SpotTag[]
+  interests       SpotInterest[]
+  checkInRecords  CheckIn[]
+  favorites       Favorite[]
+  tags            SpotTag[]
   recommendations Recommendation[]
+
+  // Add the missing relation
+  tripSpots TripSpot[]
 }
 
 // Many-to-many relation between spots and interests
@@ -126,8 +134,8 @@ model SpotInterest {
   createdAt  DateTime @default(now())
 
   // Relations
-  spot       Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
-  interest   Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  spot     Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
 
   @@unique([spotId, interestId])
   @@index([spotId])
@@ -139,14 +147,14 @@ model CheckIn {
   id        String   @id @default(cuid())
   userId    String
   spotId    String
-  rating    Int?     // Optional rating 1-5
+  rating    Int? // Optional rating 1-5
   comment   String?
   imageUrl  String?
   createdAt DateTime @default(now())
 
   // Relations
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  spot      Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spot Spot @relation(fields: [spotId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([spotId])
@@ -163,8 +171,8 @@ model Collection {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  spots       CollectionSpot[]
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spots CollectionSpot[]
 
   @@index([userId])
 }
@@ -178,8 +186,8 @@ model CollectionSpot {
   notes        String?
 
   // Relations
-  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
   @@unique([collectionId, spotId])
   @@index([collectionId])
 }
@@ -204,14 +212,14 @@ model Favorite {
 
 // Tags for categorizing spots
 model Tag {
-  id        String    @id @default(cuid())
-  name      String    @unique
+  id        String   @id @default(cuid())
+  name      String   @unique
   category  String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  spots     SpotTag[]
+  spots SpotTag[]
 }
 
 // Many-to-many relation between spots and tags
@@ -222,8 +230,8 @@ model SpotTag {
   createdAt DateTime @default(now())
 
   // Relations
-  spot      Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
-  tag       Tag      @relation(fields: [tagId], references: [id])
+  spot Spot @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id])
 
   @@unique([spotId, tagId])
   @@index([spotId])
@@ -232,19 +240,19 @@ model SpotTag {
 
 // AI-generated recommendations
 model Recommendation {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   spotId      String
   interestId  String
-  location    String   // City or region for which this was recommended
-  description String?  // AI-generated explanation of why this is recommended
-  score       Float    @default(0) // Relevance score
-  source      String?  // Which model or pipeline generated this
-  createdAt   DateTime @default(now())
+  location    String // City or region for which this was recommended
+  description String? // AI-generated explanation of why this is recommended
+  score       Float     @default(0) // Relevance score
+  source      String? // Which model or pipeline generated this
+  createdAt   DateTime  @default(now())
   expiresAt   DateTime?
 
   // Relations
-  spot        Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
-  interest    Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  spot     Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
 
   @@index([spotId])
   @@index([interestId])
@@ -252,26 +260,28 @@ model Recommendation {
 }
 
 model Trip {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   name        String
   description String?
   startDate   DateTime?
   endDate     DateTime?
-  isPublic    Boolean  @default(false)
+  isPublic    Boolean   @default(false)
   location    String?
-  
+
   // The creator/owner of the trip
-  creator     User     @relation("TripCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  creatorId   String
-  
+  creator   User   @relation("TripCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorId String
+
   // All users who can collaborate on this trip
   collaborators TripCollaborator[]
-  
+
   // All spots included in this trip
-  spots       TripSpot[]
-  
+  spots  TripSpot[]
+  User   User?      @relation(fields: [userId], references: [id])
+  userId String?
+
   @@index([creatorId])
 }
 
@@ -279,16 +289,16 @@ model TripCollaborator {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Permission level for this collaborator
-  role      String   @default("viewer") // "viewer", "editor", "admin"
-  
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  tripId    String
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  
+  role String @default("viewer") // "viewer", "editor", "admin"
+
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
   // A user can collaborate on a trip only once
   @@unique([tripId, userId])
   @@index([tripId])
@@ -299,20 +309,20 @@ model TripSpot {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Optional ordering or scheduling information
-  order     Int?
-  day       Int?     // Which day of the trip
-  time      String?  // Time of day (e.g. "10:00")
-  duration  Int?     // Duration in minutes
-  notes     String?  // Notes about this spot for the trip
-  
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  tripId    String
-  
-  spot      Spot     @relation(fields: [spotId], references: [id], onDelete: Cascade)
-  spotId    String
-  
+  order    Int?
+  day      Int? // Which day of the trip
+  time     String? // Time of day (e.g. "10:00")
+  duration Int? // Duration in minutes
+  notes    String? // Notes about this spot for the trip
+
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId String
+
+  spot   Spot   @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  spotId String
+
   // A spot can be added to a trip only once
   @@unique([tripId, spotId])
   @@index([tripId])
