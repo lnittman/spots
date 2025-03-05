@@ -136,24 +136,26 @@ export default function HomePage() {
         </section>
         
         {/* CTA Section */}
-        <section id="cta" className="container py-12 md:py-16 lg:py-20 px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-3 sm:gap-4 text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold leading-[1.1] md:text-4xl lg:text-5xl">
-              Ready to discover your spots?
-            </h2>
-            <p className="max-w-[95%] sm:max-w-[85%] leading-normal text-white/60 text-sm sm:text-base md:text-lg sm:leading-7">
-              Create your profile and start getting personalized recommendations today.
-            </p>
-            <Link 
-              href="/onboarding" 
-              className={cn(
-                buttonVariants({ size: "lg" }),
-                "mt-4 bg-[#4ECDC4]/90 hover:bg-[#4ECDC4] w-full sm:w-auto max-w-xs"
-              )}
-            >
-              <Icon name="ArrowRight" className="mr-2" weight="duotone" />
-              Get Started
-            </Link>
+        <section id="cta" className="w-full py-12 md:py-16 lg:py-20">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+            <div className="w-full mx-auto flex max-w-[58rem] flex-col items-center gap-3 sm:gap-4 text-center">
+              <h2 className="text-2xl sm:text-3xl font-bold leading-[1.1] md:text-4xl lg:text-5xl">
+                Ready to discover your spots?
+              </h2>
+              <p className="max-w-[95%] sm:max-w-[85%] leading-normal text-white/60 text-sm sm:text-base md:text-lg sm:leading-7">
+                Create your profile and start getting personalized recommendations today.
+              </p>
+              <Link 
+                href="/onboarding" 
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "mt-4 bg-[#4ECDC4]/90 hover:bg-[#4ECDC4] w-full sm:w-auto max-w-xs"
+                )}
+              >
+                <Icon name="ArrowRight" className="mr-2" weight="duotone" />
+                Get Started
+              </Link>
+            </div>
           </div>
         </section>
       </main>
