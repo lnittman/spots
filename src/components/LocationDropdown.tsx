@@ -24,21 +24,25 @@ export function LocationDropdown({
   className = '',
 }: LocationDropdownProps) {
   const [searchQuery, setSearchQuery] = useState(selectedLocation.title);
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Filter locations based on search input
-  const filteredLocations = searchQuery.trim() === '' 
-    ? locations 
-    : locations.filter(loc => 
-        loc.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+  // Filter locations based on search input, but only when actively typing
+  const filteredLocations = isTyping && activeSearchQuery.trim() !== '' 
+    ? locations.filter(loc => 
+        loc.title.toLowerCase().includes(activeSearchQuery.toLowerCase()))
+    : locations;
 
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
+        setIsTyping(false);
+        setActiveSearchQuery("");
+        setSearchQuery(selectedLocation.title); // Reset to selected location if clicked outside
       }
     }
     
@@ -46,12 +50,14 @@ export function LocationDropdown({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [selectedLocation]);
 
   // Select a location
   const selectLocation = (location: LocationItem) => {
     onChange(location);
     setSearchQuery(location.title);
+    setActiveSearchQuery("");
+    setIsTyping(false);
     setShowDropdown(false);
   };
 
@@ -62,12 +68,17 @@ export function LocationDropdown({
           type="text"
           placeholder="Search for a city..."
           className="bg-white/90 backdrop-blur-sm shadow-md text-[#050A14] border-0 pl-9"
-          value={searchQuery}
+          value={isTyping ? activeSearchQuery : searchQuery}
           onChange={(e) => {
-            setSearchQuery(e.target.value);
+            setActiveSearchQuery(e.target.value);
+            setIsTyping(true);
             setShowDropdown(true);
           }}
-          onFocus={() => setShowDropdown(true)}
+          onFocus={() => {
+            setShowDropdown(true);
+            setIsTyping(true);
+            setActiveSearchQuery(""); // Clear the input when focused for new search
+          }}
         />
         <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#050A14]/70">
           {selectedLocation.emoji || '🔍'}
@@ -78,7 +89,7 @@ export function LocationDropdown({
             {filteredLocations.length > 0 ? (
               <>
                 {/* Trending Cities Section */}
-                {searchQuery.trim() === '' && (
+                {(!isTyping || activeSearchQuery.trim() === '') && (
                   <div className="px-3 py-2">
                     <div className="text-xs font-semibold text-[#050A14]/60 uppercase tracking-wider mb-1">
                       Trending Cities
@@ -102,9 +113,9 @@ export function LocationDropdown({
 
                 {/* All Cities Section */}
                 <div className="px-3 py-2">
-                  {searchQuery.trim() === '' && (
+                  {(!isTyping || activeSearchQuery.trim() === '') && (
                     <div className="text-xs font-semibold text-[#050A14]/60 uppercase tracking-wider mb-1">
-                      All Cities ({filteredLocations.length})
+                      All Cities ({locations.length})
                     </div>
                   )}
                   

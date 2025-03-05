@@ -328,6 +328,14 @@ export function HomeMap() {
     return tagColors[colorKey] || "bg-white/5 text-white/70 border-white/10";
   };
 
+  // Function to handle location change
+  const handleLocationChange = (location: LocationItem) => {
+    setSelectedLocation(location);
+    
+    // Log the change for analytics
+    console.log("Location changed to:", location.title);
+  };
+
   return (
     <div className="flex flex-col">
       {/* Horizontal Interest Picker with Scroll */}
@@ -377,8 +385,8 @@ export function HomeMap() {
         <LocationDropdown
           locations={sampleLocations}
           selectedLocation={selectedLocation}
-          onChange={setSelectedLocation}
-          className="absolute top-3 left-3 z-10 w-64"
+          onChange={handleLocationChange}
+          className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 w-72 shadow-lg"
         />
         
         <MapView 

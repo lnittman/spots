@@ -6,11 +6,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
 import { LIMLogger, LogCategory } from '@/lib/lim/logging';
-import { LocationDropdown, type LocationItem } from '@/components/LocationDropdown';
 import { defaultCities, getCityData } from '@/lib/cities-data';
 
-// Convert city data to location items for dropdown
-const cityLocations: LocationItem[] = defaultCities.map(city => ({
+// Get city data from the cities-data module
+const cityLocations = defaultCities.map(city => ({
   id: city.id,
   title: city.name,
   coordinates: city.coordinates,
@@ -67,8 +66,9 @@ const demoInterests = [
 ];
 
 export function DynamicFeatures() {
-  // State for the selected location
-  const [selectedLocation, setSelectedLocation] = useState(cityLocations[0]);
+  // Use fixed location - selection moved to HomeMap
+  const selectedLocation = cityLocations[0]; // Los Angeles
+  
   const [personalized, setPersonalized] = useState<FeatureDemo>({
     title: "Personalized Recommendations",
     content: null,
@@ -95,11 +95,11 @@ export function DynamicFeatures() {
     // Log the change for analytics
     logger.info(
       LogCategory.USER,
-      'City changed in feature demos',
+      'Loading features for city',
       { cityId: selectedLocation.id, cityName: selectedLocation.title },
-      ['HOME', 'FEATURES', 'CITY_CHANGE']
+      ['HOME', 'FEATURES', 'INIT']
     );
-  }, [selectedLocation]);
+  }, []); // No dependencies since selectedLocation is now constant
 
   // Load personalized recommendations for the selected location
   const loadPersonalizedRecommendations = async () => {
@@ -365,19 +365,6 @@ export function DynamicFeatures() {
 
   return (
     <div className="w-full">
-      {/* City Location Selector - positioned above feature cards */}
-      <div className="flex flex-col sm:flex-row justify-center items-center mb-6 relative z-10">
-        <div className="mb-2 sm:mb-0 sm:mr-3 text-white/60 text-sm">
-          Select a city:
-        </div>
-        <LocationDropdown
-          locations={cityLocations}
-          selectedLocation={selectedLocation}
-          onChange={setSelectedLocation}
-          className="w-64"
-        />
-      </div>
-      
       {/* Feature Cards Grid - Centered with flex */}
       <div className="flex flex-col lg:flex-row justify-center items-center gap-8 sm:gap-10 py-6 sm:py-8 mx-auto">
         {/* Personalized Recommendations */}
