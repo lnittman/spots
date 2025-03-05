@@ -2,7 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { compare } from 'bcrypt';
+import { compare } from 'bcryptjs';
 import { LIMLogger, LogCategory } from '@/lib/lim/logging';
 import type { Adapter } from 'next-auth/adapters';
 import prisma from '@/lib/db/prisma';

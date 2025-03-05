@@ -18,9 +18,6 @@ const nextConfig = {
     optimizeCss: true,
   },
   
-  // Handle bcrypt properly - this tells Next.js to bundle bcrypt for the server
-  serverExternalPackages: ['bcrypt'],
-  
   // Define path rewrites to ensure API routes work correctly
   async rewrites() {
     return [
@@ -42,15 +39,6 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_VERCEL_ENV: process.env.NEXT_PUBLIC_VERCEL_ENV,
     NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-  },
-  
-  // Special handling for bcrypt in webpack
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // This is to handle native modules like bcrypt
-      config.externals = [...config.externals, 'bcrypt'];
-    }
-    return config;
   },
 };
 
