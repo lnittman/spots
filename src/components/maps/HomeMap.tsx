@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { LocationDropdown, type LocationItem } from '@/components/LocationDropdown';
+import { defaultCities } from '@/lib/cities-data';
 
 // Large Interest Model (LIM) Pipeline Configuration
 // This system handles interest processing, spot discovery, and personalized recommendations
@@ -21,89 +22,15 @@ const LIM_CONFIG = {
   LAST_UPDATE: new Date().toISOString(),
 };
 
-// Sample data would be refreshed by the LIM pipeline via cron job
-const sampleLocations: LocationItem[] = [
-  { 
-    id: '5', 
-    coordinates: [-118.2437, 34.0522] as [number, number], 
-    title: 'Los Angeles', 
-    type: 'city',
-    emoji: '🌴',
-    trending: true
-  },
-  { 
-    id: '1', 
-    coordinates: [-122.4194, 37.7749] as [number, number], 
-    title: 'San Francisco', 
-    type: 'city',
-    emoji: '🌉',
-    trending: true
-  },
-  { 
-    id: '2', 
-    coordinates: [-122.3321, 37.8800] as [number, number], 
-    title: 'Berkeley', 
-    type: 'city',
-    emoji: '🎓',
-    trending: false
-  },
-  { 
-    id: '3', 
-    coordinates: [-122.2364, 37.5485] as [number, number], 
-    title: 'Palo Alto', 
-    type: 'city',
-    emoji: '💻',
-    trending: false
-  },
-  { 
-    id: '4', 
-    coordinates: [-74.0060, 40.7128] as [number, number], 
-    title: 'New York', 
-    type: 'city',
-    emoji: '🗽',
-    trending: true
-  },
-  {
-    id: '6',
-    coordinates: [-80.1918, 25.7617] as [number, number],
-    title: 'Miami',
-    type: 'city',
-    emoji: '🏖️',
-    trending: true
-  },
-  {
-    id: '7',
-    coordinates: [-87.6298, 41.8781] as [number, number],
-    title: 'Chicago',
-    type: 'city',
-    emoji: '🌆',
-    trending: true
-  },
-  {
-    id: '8',
-    coordinates: [-97.7431, 30.2672] as [number, number],
-    title: 'Austin',
-    type: 'city',
-    emoji: '🎸',
-    trending: true
-  },
-  {
-    id: '9',
-    coordinates: [-122.3321, 47.6062] as [number, number],
-    title: 'Seattle',
-    type: 'city',
-    emoji: '☕',
-    trending: false
-  },
-  {
-    id: '10',
-    coordinates: [-104.9903, 39.7392] as [number, number],
-    title: 'Denver',
-    type: 'city',
-    emoji: '⛰️',
-    trending: false
-  }
-];
+// Use default cities from our cities-data module
+const sampleLocations: LocationItem[] = defaultCities.map(city => ({
+  id: city.id,
+  title: city.name,
+  coordinates: city.coordinates,
+  emoji: city.emoji,
+  trending: city.trending,
+  type: city.type
+}));
 
 // These interests would be dynamically generated and updated by the LIM
 const sampleInterests = [
