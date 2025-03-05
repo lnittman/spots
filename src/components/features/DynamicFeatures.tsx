@@ -364,11 +364,11 @@ export function DynamicFeatures() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4">
+    <div className="w-full">
       {/* Feature Cards Grid - Centered with flex */}
-      <div className="flex flex-col lg:flex-row justify-center items-stretch gap-8 sm:gap-10 py-6 sm:py-8">
+      <div className="flex flex-col lg:flex-row justify-center items-stretch gap-8 sm:gap-10 py-6 sm:py-8 w-full">
         {/* Personalized Recommendations */}
-        <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full max-w-md hover:bg-white/5 transition-all duration-300">
+        <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full lg:w-1/3 max-w-sm mx-auto hover:bg-white/5 transition-all duration-300">
           <div className="mb-3 sm:mb-4 text-[#4ECDC4]/80">
             <Icon name="Star" size="xl" weight="duotone" />
           </div>
@@ -393,7 +393,7 @@ export function DynamicFeatures() {
         </div>
 
         {/* Natural Language Search */}
-        <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full max-w-md hover:bg-white/5 transition-all duration-300">
+        <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full lg:w-1/3 max-w-sm mx-auto hover:bg-white/5 transition-all duration-300">
           <div className="mb-3 sm:mb-4 text-[#AAC789]/80">
             <Icon name="ChatCircleText" size="xl" weight="duotone" />
           </div>
@@ -415,7 +415,7 @@ export function DynamicFeatures() {
         </div>
 
         {/* Contextual Awareness */}
-        <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full max-w-md hover:bg-white/5 transition-all duration-300">
+        <div className="rounded-lg border border-white/5 bg-white/3 p-4 sm:p-6 flex flex-col items-center text-center w-full lg:w-1/3 max-w-sm mx-auto hover:bg-white/5 transition-all duration-300">
           <div className="mb-3 sm:mb-4 text-[#FF6B6B]/80">
             <Icon name="Lightbulb" size="xl" weight="duotone" />
           </div>

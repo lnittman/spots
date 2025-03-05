@@ -87,19 +87,21 @@ export default function HomePage() {
         {/* Features Section */}
         <section
           id="features"
-          className="container space-y-6 py-12 md:py-16 lg:py-20 px-4 sm:px-6 lg:px-8"
+          className="w-full py-12 md:py-16 lg:py-20"
         >
-          <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold leading-[1.1] md:text-4xl lg:text-5xl">
-              Features
-            </h2>
-            <p className="max-w-[95%] sm:max-w-[85%] leading-normal text-white/60 text-sm sm:text-base md:text-lg sm:leading-7">
-              Discover the powerful features that make Spots your perfect companion for place discovery
-            </p>
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+            <div className="w-full mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center mb-12">
+              <h2 className="text-2xl sm:text-3xl font-bold leading-[1.1] md:text-4xl lg:text-5xl">
+                Features
+              </h2>
+              <p className="max-w-[95%] sm:max-w-[85%] leading-normal text-white/60 text-sm sm:text-base md:text-lg sm:leading-7">
+                Discover the powerful features that make Spots your perfect companion for place discovery
+              </p>
+            </div>
+            
+            {/* Dynamic features component */}
+            <DynamicFeatures />
           </div>
-          
-          {/* Dynamic features component */}
-          <DynamicFeatures />
         </section>
         
         {/* CTA Section */}
