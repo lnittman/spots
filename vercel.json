@@ -1,31 +1,10 @@
 {
   "version": 2,
   "buildCommand": "pnpm build",
-  "devCommand": "pnpm dev",
   "installCommand": "pnpm install",
   "framework": "nextjs",
-  "outputDirectory": ".next",
+  "regions": ["iad1"],
   "env": {
     "NEXT_PUBLIC_VERCEL_ENV": "production"
-  },
-  "regions": ["iad1"],
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/node",
-      "config": {
-        "nodeVersion": "20.x"
-      }
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/refresh-trending",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-interests",
-      "schedule": "0 2 * * 0"
-    }
-  ]
+  }
 } 
